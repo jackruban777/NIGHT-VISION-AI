@@ -1,0 +1,208 @@
+@tailwind base;
+@tailwind components;
+@tailwind utilities;
+
+:root {
+  --bg-color: #141313;
+  --card-bg: #1B1B1D;
+  --card-border: #202124;
+  --text-main: #e5e2e1;
+  --text-muted: #958EA0;
+  --sidebar-bg: #1c1b1b;
+  --header-bg: rgba(20, 19, 19, 0.9);
+  --container-bg: #201f1f;
+  --container-high: #2b2a2a;
+}
+
+html.light {
+  --bg-color: #f4f6f9;
+  --card-bg: #ffffff;
+  --card-border: #e2e8f0;
+  --text-main: #0f172a;
+  --text-muted: #475569;
+  --sidebar-bg: #ffffff;
+  --header-bg: rgba(255, 255, 255, 0.95);
+  --container-bg: #f1f5f9;
+  --container-high: #e2e8f0;
+}
+
+@layer base {
+  body {
+    background-color: var(--bg-color);
+    color: var(--text-main);
+    overflow-x: hidden;
+    font-family: 'Inter', sans-serif;
+    transition: background-color 0.3s ease, color 0.3s ease;
+  }
+}
+
+/* Light Mode Comprehensive Overrides */
+html.light body {
+  background-color: #f4f6f9 !important;
+  color: #0f172a !important;
+}
+
+html.light aside {
+  background-color: #ffffff !important;
+  border-color: #e2e8f0 !important;
+  box-shadow: 2px 0 12px rgba(0, 0, 0, 0.04);
+}
+
+html.light header {
+  background-color: rgba(255, 255, 255, 0.95) !important;
+  border-color: #e2e8f0 !important;
+  box-shadow: 0 2px 10px rgba(0, 0, 0, 0.03);
+}
+
+html.light .card-premium {
+  background-color: #ffffff !important;
+  border-color: #e2e8f0 !important;
+  color: #0f172a !important;
+  box-shadow: 0 4px 16px rgba(0, 0, 0, 0.05);
+}
+
+html.light .card-premium:hover {
+  border-color: #00E5FF !important;
+  box-shadow: 0 6px 20px rgba(0, 229, 255, 0.15) !important;
+}
+
+html.light .bg-surface-container-low {
+  background-color: #ffffff !important;
+}
+
+html.light .bg-surface-container {
+  background-color: #f1f5f9 !important;
+  border-color: #cbd5e1 !important;
+}
+
+html.light .bg-surface-container-high {
+  background-color: #e2e8f0 !important;
+}
+
+html.light .bg-surface-container-highest {
+  background-color: #cbd5e1 !important;
+}
+
+html.light .text-white:not(.video-overlay-text) {
+  color: #0f172a !important;
+}
+
+html.light .text-on-surface-variant {
+  color: #475569 !important;
+}
+
+html.light .border-outline-variant {
+  border-color: #e2e8f0 !important;
+}
+
+html.light input, html.light select {
+  background-color: #ffffff !important;
+  border-color: #cbd5e1 !important;
+  color: #0f172a !important;
+}
+
+html.light table {
+  color: #0f172a !important;
+}
+
+html.light thead {
+  background-color: #f1f5f9 !important;
+  color: #475569 !important;
+}
+
+html.light tbody tr:hover {
+  background-color: #f8fafc !important;
+}
+
+html.light .material-symbols-outlined {
+  color: #0f172a;
+}
+
+/* Premium Card Styles from Stitch */
+.card-premium {
+  background-color: var(--card-bg);
+  border: 1px solid var(--card-border);
+  padding: 24px;
+  border-radius: 16px;
+  transition: all 0.3s cubic-bezier(0.4, 0, 0.2, 1);
+}
+
+.card-premium:hover {
+  border-color: rgba(0, 229, 255, 0.4);
+  box-shadow: 0 0 24px rgba(0, 229, 255, 0.08);
+}
+
+/* Glassmorphism & HUD overlays */
+.glass-overlay {
+  backdrop-filter: blur(20px);
+  -webkit-backdrop-filter: blur(20px);
+  background: rgba(0, 0, 0, 0.4);
+}
+
+.hud-scanline {
+  background: linear-gradient(to bottom, transparent 50%, rgba(0, 229, 255, 0.05) 50.5%, transparent 51%);
+  background-size: 100% 4px;
+  pointer-events: none;
+}
+
+.hud-overlay {
+  background: linear-gradient(180deg, rgba(20, 19, 19, 0) 0%, rgba(20, 19, 19, 0.8) 100%);
+}
+
+.ambient-glow {
+  box-shadow: 0px 20px 40px rgba(0, 0, 0, 0.5);
+}
+
+/* Animations */
+@keyframes pulse-ring {
+  0% { transform: scale(0.95); opacity: 0.8; }
+  50% { transform: scale(1.05); opacity: 0.4; }
+  100% { transform: scale(0.95); opacity: 0.8; }
+}
+
+.pip-active {
+  animation: pulse-ring 2s infinite ease-in-out;
+}
+
+@keyframes scan {
+  0% { top: 0%; opacity: 0; }
+  10% { opacity: 1; }
+  90% { opacity: 1; }
+  100% { top: 100%; opacity: 0; }
+}
+
+.scanning-line {
+  width: 100%;
+  height: 2px;
+  background: linear-gradient(90deg, transparent, #00E5FF, transparent);
+  position: absolute;
+  top: 0;
+  animation: scan 4s linear infinite;
+}
+
+/* Custom Scrollbars */
+::-webkit-scrollbar {
+  width: 6px;
+  height: 6px;
+}
+
+::-webkit-scrollbar-track {
+  background: #141313;
+}
+
+::-webkit-scrollbar-thumb {
+  background: #202124;
+  border-radius: 3px;
+}
+
+::-webkit-scrollbar-thumb:hover {
+  background: #00E5FF;
+}
+
+html.light ::-webkit-scrollbar-track {
+  background: #f1f5f9;
+}
+
+html.light ::-webkit-scrollbar-thumb {
+  background: #cbd5e1;
+}

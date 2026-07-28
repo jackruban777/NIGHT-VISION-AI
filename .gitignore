@@ -1,0 +1,94 @@
+# ==========================================
+# NightVision AI - Git Ignore Specification
+# ==========================================
+
+# 1. Environment Variables & Secret Files (CRITICAL)
+.env
+.env.local
+.env.development
+.env.test
+.env.production
+.env*.local
+*.env
+!*.env.example
+
+# Subdirectory Env files
+frontend/.env
+frontend/.env.local
+frontend/.env.development.local
+frontend/.env.test.local
+frontend/.env.production.local
+backend/.env
+backend/.env.local
+
+# 2. Python & Virtual Environments
+__pycache__/
+*.py[cod]
+*$py.class
+*.so
+.Python
+env/
+venv/
+ENV/
+env.bak/
+venv.bak/
+backend/venv/
+backend/.venv/
+backend/__pycache__/
+backend/app/__pycache__/
+backend/app/*/__pycache__/
+
+# 3. Node & Web Frontend Dependencies & Builds
+node_modules/
+frontend/node_modules/
+dist/
+frontend/dist/
+dist-ssr/
+frontend/dist-ssr/
+*.egg-info/
+.vite/
+frontend/.vite/
+.eslintcache
+
+# 4. Database & Storage
+*.sqlite
+*.sqlite3
+*.db
+nightvision.db
+backend/nightvision.db
+*.sqlite-journal
+
+# 5. Logs & Temporary Files
+*.log
+npm-debug.log*
+yarn-debug.log*
+yarn-error.log*
+pnpm-debug.log*
+logs/
+*.tmp
+*.temp
+
+# 6. Operating System & IDE Files
+.DS_Store
+.DS_Store?
+._*
+.Spotlight-V100
+.Trashes
+ehthumbs.db
+Thumbs.db
+.vscode/
+!.vscode/settings.json
+!.vscode/tasks.json
+!.vscode/launch.json
+!.vscode/extensions.json
+.idea/
+*.suo
+*.ntvs*
+*.njsproj
+*.sln
+*.sw?
+
+# 7. Testing & Coverage
+.coverage
+htmlcov/
+.pytest_cache/
