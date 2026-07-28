@@ -147,18 +147,17 @@ export const LiveCamera: React.FC = () => {
       }
 
       if (!backendActive) {
-        // Smoothly approaching real targets simulation (cycling from 48m down to 10m)
-        const cycleProgress = ((Date.now() / 1000) % 24) / 24; // 0 to 1 over 24s
-        const p1Dist = Number((48 - cycleProgress * 36).toFixed(1)); // 48m -> 12m
-        const v1Dist = Number((52 - cycleProgress * 30).toFixed(1)); // 52m -> 22m
-
-        const vehicleClasses = ['Car', 'Bike', 'Cycle', 'Lorry', 'Unidentified Vehicle'];
-        const currentVehicle = vehicleClasses[Math.floor((Date.now() / 7000) % vehicleClasses.length)];
+        // Multi-object continuous tracking simulation (Pedestrians, Vehicles, Bikes, Cones)
+        const cycleProgress = ((Date.now() / 1000) % 20) / 20; // 0 to 1 over 20s
+        const p1Dist = Number((45 - cycleProgress * 32).toFixed(1)); // 45m -> 13m
+        const v1Dist = Number((55 - cycleProgress * 35).toFixed(1)); // 55m -> 20m
+        const b1Dist = Number((38 - cycleProgress * 24).toFixed(1)); // 38m -> 14m
+        const c1Dist = Number((22 - cycleProgress * 15).toFixed(1)); // 22m -> 7m
 
         const getRiskLevel = (dist: number): 'Low' | 'Medium' | 'High' | 'Critical' => {
-          if (dist < 15) return 'Critical';
-          if (dist < 28) return 'High';
-          if (dist < 45) return 'Medium';
+          if (dist < 12) return 'Critical';
+          if (dist < 25) return 'High';
+          if (dist < 40) return 'Medium';
           return 'Low';
         };
 
@@ -167,25 +166,49 @@ export const LiveCamera: React.FC = () => {
             id: 'obj_p1',
             class: 'Pedestrian',
             confidence: 0.94,
-            x: 28 + Math.sin(Date.now() / 1000) * 3,
-            y: 42,
-            w: 12,
-            h: 28,
+            x: 24 + Math.sin(Date.now() / 800) * 2.5,
+            y: 40,
+            w: 10,
+            h: 26,
             distance: p1Dist,
             speed: 4,
             risk: getRiskLevel(p1Dist),
           },
           {
             id: 'obj_v1',
-            class: currentVehicle,
+            class: 'Car',
             confidence: 0.96,
-            x: 48,
-            y: 35,
-            w: 22,
-            h: 24,
+            x: 46,
+            y: 34,
+            w: 20,
+            h: 22,
             distance: v1Dist,
             speed: 68,
             risk: getRiskLevel(v1Dist),
+          },
+          {
+            id: 'obj_b1',
+            class: 'Bike',
+            confidence: 0.91,
+            x: 72 + Math.cos(Date.now() / 1200) * 1.5,
+            y: 44,
+            w: 12,
+            h: 18,
+            distance: b1Dist,
+            speed: 52,
+            risk: getRiskLevel(b1Dist),
+          },
+          {
+            id: 'obj_c1',
+            class: 'Traffic Cone',
+            confidence: 0.89,
+            x: 38,
+            y: 68,
+            w: 6,
+            h: 10,
+            distance: c1Dist,
+            speed: 0,
+            risk: getRiskLevel(c1Dist),
           },
         ];
 
