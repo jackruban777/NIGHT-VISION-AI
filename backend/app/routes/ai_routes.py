@@ -19,6 +19,24 @@ async def analyze_frame(file: UploadFile = File(...), night_enhance: bool = True
     result = hazard_detector.process_frame(frame, apply_night_enhance=night_enhance)
     return result
 
+from pydantic import BaseModel, Field
+
+class DriverFatiguePayload(BaseModel):
+    ear: float = Field(..., example=0.18)
+    yawn_duration_s: float = Field(0.0, example=1.5)
+    eye_landmarks: list = Field(default_factory=list)
+
+@router.post("/driver-fatigue")
+def analyze_driver_fatigue(payload: DriverFatiguePayload):
+    from app.ai.driver_monitor import driver_monitor
+    
+    calculated_ear = payload.ear
+    if len(payload.eye_landmarks) >= 6:
+        calculated_ear = driver_monitor.calculate_ear(payload.eye_landmarks)
+
+    result = driver_monitor.analyze_driver_state(calculated_ear, payload.yawn_duration_s)
+    return result
+
 @router.websocket("/ws/stream")
 async def stream_ai_detection(websocket: WebSocket):
     await websocket.accept()
