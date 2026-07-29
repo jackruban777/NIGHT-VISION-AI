@@ -204,14 +204,20 @@ export const SettingsPage: React.FC = () => {
             </div>
 
             <div>
-              <label className="text-on-surface-variant block mb-1">Night Vision Filter</label>
+              <label className="text-on-surface-variant block mb-1">Night Vision AI Enhancement Mode</label>
               <select
                 value={nightAlgorithm}
-                onChange={(e) => setNightAlgorithm(e.target.value)}
+                onChange={(e) => {
+                  setNightAlgorithm(e.target.value);
+                  localStorage.setItem('nv_night_vision_mode', e.target.value);
+                }}
                 className="w-full bg-surface-container border border-outline-variant rounded-xl p-2.5 text-white focus:outline-none focus:border-accent-electric font-sans"
               >
-                <option value="CLAHE Histogram">CLAHE Adaptive Histogram Equalizer</option>
-                <option value="Gamma Boost">Gamma Low-Light Boost</option>
+                <option value="Auto">Auto (Dynamic Scene Luminance Detection)</option>
+                <option value="Day">Day (Pass-Through / Enhancement Disabled)</option>
+                <option value="Evening">Evening (Lightweight Curve Adjustment)</option>
+                <option value="Night">Night (Zero-DCE++ Deep Curve AI)</option>
+                <option value="Extreme Dark">Extreme Dark (Maximum Curve AI + Edge Denoising)</option>
               </select>
             </div>
           </div>

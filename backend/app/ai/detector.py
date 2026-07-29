@@ -1,4 +1,7 @@
 import os
+os.environ["YOLO_CONFIG_DIR"] = "/tmp/Ultralytics"
+os.makedirs("/tmp/Ultralytics", exist_ok=True)
+
 import time
 import gc
 import urllib.request
@@ -112,17 +115,23 @@ class HazardDetector:
             self.model = None
             self.active_model_name = "YOLO12 Load Error"
 
-    def process_frame(self, frame: np.ndarray, apply_night_enhance: bool = True) -> dict:
+    def process_frame(self, frame: np.ndarray, apply_night_enhance: bool = True, night_vision_mode: str = "Auto") -> dict:
         t_start = time.perf_counter()
 
         if frame is None or frame.size == 0:
             return self._empty_response()
 
-        # 1. Low-Light Dynamic Contrast Enhancement
+        # 1. AI Deep Learning Low-Light Image Enhancement Pipeline (Zero-DCE++ / Retinex)
         if apply_night_enhance:
-            enhanced_frame = night_enhancer.enhance_frame(frame)
+            enhanced_frame, enhance_telemetry = night_enhancer.enhance_frame(frame, user_mode=night_vision_mode)
         else:
             enhanced_frame = frame
+            enhance_telemetry = {
+                "enhancement_model": "Off (Raw Frame)",
+                "mode": "Off",
+                "luminance": round(float(np.mean(cv2.cvtColor(frame, cv2.COLOR_BGR2GRAY))), 1),
+                "latency_ms": 0.0,
+            }
 
         detections = []
         det_counter = 1
@@ -245,6 +254,13 @@ class HazardDetector:
             "device": self.device.upper(),
             "resolution": f"{self.imgsz}x{self.imgsz}",
             "night_enhance_applied": apply_night_enhance,
+            "night_vision": {
+                "enhancement_model": enhance_telemetry["enhancement_model"],
+                "mode": enhance_telemetry["mode"],
+                "luminance": enhance_telemetry["luminance"],
+                "enhancement_ms": enhance_telemetry["latency_ms"],
+                "detection_fps": round(1000.0 / max(1.0, inference_time_ms), 1),
+            },
             "overall_risk": highest_risk,
             "active_objects_count": len(detections),
             "detections": detections,
@@ -267,6 +283,13 @@ class HazardDetector:
             "device": self.device.upper(),
             "resolution": f"{self.imgsz}x{self.imgsz}",
             "night_enhance_applied": False,
+            "night_vision": {
+                "enhancement_model": "Zero-DCE++ (Deep Curve AI)",
+                "mode": "Auto",
+                "luminance": 128.0,
+                "enhancement_ms": 0.0,
+                "detection_fps": 30.0,
+            },
             "overall_risk": "Low",
             "active_objects_count": 0,
             "detections": [],

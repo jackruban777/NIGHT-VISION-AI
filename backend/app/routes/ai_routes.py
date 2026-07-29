@@ -11,7 +11,7 @@ from app.ai.dms.dms_pipeline import dms_pipeline
 router = APIRouter(prefix="/ai", tags=["AI Perception"])
 
 @router.post("/detect")
-async def analyze_frame(file: UploadFile = File(...), night_enhance: bool = True):
+async def analyze_frame(file: UploadFile = File(...), night_enhance: bool = True, night_vision_mode: str = "Auto"):
     contents = await file.read()
     nparr = np.frombuffer(contents, np.uint8)
     frame = cv2.imdecode(nparr, cv2.IMREAD_COLOR)
@@ -19,7 +19,7 @@ async def analyze_frame(file: UploadFile = File(...), night_enhance: bool = True
     if frame is None:
         return {"error": "Invalid image payload"}
 
-    result = hazard_detector.process_frame(frame, apply_night_enhance=night_enhance)
+    result = hazard_detector.process_frame(frame, apply_night_enhance=night_enhance, night_vision_mode=night_vision_mode)
     return result
 
 @router.post("/dms/analyze")
