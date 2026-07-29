@@ -1,6 +1,6 @@
 import React, { useState } from 'react';
 import { NavLink } from 'react-router-dom';
-import { Home, Camera, UserCheck, Eye, BarChart3, Navigation, Bell, Settings, Activity, Cpu } from 'lucide-react';
+import { Home, Camera, UserCheck, Eye, BarChart3, Navigation, Bell, Settings, Smartphone, Activity, Cpu } from 'lucide-react';
 
 export const SidebarNav: React.FC = () => {
   const [isScanning, setIsScanning] = useState(false);
@@ -22,6 +22,7 @@ export const SidebarNav: React.FC = () => {
     { to: '/trips', label: '5. Trip Logs', icon: Navigation },
     { to: '/notifications', label: '6. Notifications', icon: Bell },
     { to: '/settings', label: '7. Settings', icon: Settings },
+    { to: '/mobile-connect', label: '8. Mobile Camera Connect', icon: Smartphone },
   ];
 
   return (

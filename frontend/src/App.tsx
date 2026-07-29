@@ -14,6 +14,8 @@ import { Analytics } from './pages/Analytics';
 import { TripHistory } from './pages/TripHistory';
 import { NotificationsPage } from './pages/Notifications';
 import { SettingsPage } from './pages/Settings';
+import { MobileConnect } from './pages/MobileConnect';
+import { MobileStreamPage } from './pages/MobileStreamPage';
 
 const AppLayout: React.FC<{ children: React.ReactNode }> = ({ children }) => {
   const location = useLocation();
@@ -34,6 +36,8 @@ const AppLayout: React.FC<{ children: React.ReactNode }> = ({ children }) => {
         return 'Hazard Notification Center';
       case '/settings':
         return 'Sensors & AI Settings';
+      case '/mobile-connect':
+        return 'Mobile Camera Connect & WebRTC';
       default:
         return 'NightVision AI';
     }
@@ -64,6 +68,9 @@ export const App: React.FC = () => {
         <Route path="/" element={<Welcome />} />
         <Route path="/launch" element={<Welcome />} />
 
+        {/* Standalone Mobile Web App Stream Page */}
+        <Route path="/mobile-stream" element={<MobileStreamPage />} />
+
         {/* Internal Application Pages */}
         <Route path="/live-camera" element={<AppLayout><LiveCamera /></AppLayout>} />
         <Route path="/driver-monitor" element={<AppLayout><DriverMonitor /></AppLayout>} />
@@ -72,6 +79,7 @@ export const App: React.FC = () => {
         <Route path="/trips" element={<AppLayout><TripHistory /></AppLayout>} />
         <Route path="/notifications" element={<AppLayout><NotificationsPage /></AppLayout>} />
         <Route path="/settings" element={<AppLayout><SettingsPage /></AppLayout>} />
+        <Route path="/mobile-connect" element={<AppLayout><MobileConnect /></AppLayout>} />
         <Route path="*" element={<Navigate to="/" replace />} />
       </Routes>
     </EmergencyProvider>

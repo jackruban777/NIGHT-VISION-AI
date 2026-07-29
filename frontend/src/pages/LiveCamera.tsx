@@ -22,7 +22,9 @@ const SAMPLE_VIDEOS = [
 ];
 
 export const LiveCamera: React.FC = () => {
-  const [sourceType, setSourceType] = useState<'video' | 'webcam' | 'upload'>('video');
+  const [sourceType, setSourceType] = useState<'video' | 'webcam' | 'upload' | 'mobile'>(
+    (localStorage.getItem('nv_preferred_camera_source') as any) || 'video'
+  );
   const [selectedVideo, setSelectedVideo] = useState(SAMPLE_VIDEOS[0].url);
   const [customVideoUrl, setCustomVideoUrl] = useState<string | null>(null);
   const [nightEnhance, setNightEnhance] = useState(true);
@@ -276,6 +278,14 @@ export const LiveCamera: React.FC = () => {
               }`}
             >
               Webcam
+            </button>
+            <button
+              onClick={() => setSourceType('mobile')}
+              className={`px-3 py-1.5 rounded-lg text-xs font-label-caps uppercase transition-all ${
+                sourceType === 'mobile' ? 'bg-accent-electric text-black font-bold' : 'text-on-surface-variant hover:text-white'
+              }`}
+            >
+              Mobile Cam
             </button>
             <label
               className={`px-3 py-1.5 rounded-lg text-xs font-label-caps uppercase transition-all cursor-pointer flex items-center gap-1 ${

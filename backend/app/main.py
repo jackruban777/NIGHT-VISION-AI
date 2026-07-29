@@ -2,7 +2,7 @@ from fastapi import FastAPI
 from fastapi.middleware.cors import CORSMiddleware
 from app.config import settings
 from app.database.connection import init_db
-from app.routes import ai_routes, trips
+from app.routes import ai_routes, trips, mobile_routes
 
 app = FastAPI(
     title=settings.PROJECT_NAME,
@@ -24,6 +24,8 @@ app.include_router(ai_routes.router, prefix=settings.API_V1_STR)
 app.include_router(ai_routes.router)
 app.include_router(trips.router, prefix=settings.API_V1_STR)
 app.include_router(trips.router)
+app.include_router(mobile_routes.router, prefix=settings.API_V1_STR)
+app.include_router(mobile_routes.router)
 
 @app.on_event("startup")
 def startup_event():

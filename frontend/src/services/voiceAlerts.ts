@@ -117,8 +117,22 @@ class VoiceAlertService {
    * Guaranteed Web Audio API Harmonic Chime Generator.
    * Plays audible warning tones independently of SpeechSynthesis.
    */
+  private lastChimeTime: Record<string, number> = {};
+
+  /**
+   * Guaranteed Web Audio API Single-Tone Generator.
+   * Plays a single short audible tone ONCE per alert trigger (no continuous looping).
+   */
   public playChime(type: 'beep' | 'warning' | 'drowsy' | 'critical' | 'emergency') {
     if (this.isMuted) return;
+    const nowMs = Date.now();
+
+    // Prevent continuous ring tones (4s minimum gap per chime type)
+    if (this.lastChimeTime[type] && nowMs - this.lastChimeTime[type] < 4000) {
+      return;
+    }
+    this.lastChimeTime[type] = nowMs;
+
     this.unlockAudioContext();
 
     try {
@@ -129,53 +143,24 @@ class VoiceAlertService {
 
       const now = ctx.currentTime;
       const masterGain = ctx.createGain();
-      masterGain.gain.setValueAtTime(0.3 * this.volume, now);
+      masterGain.gain.setValueAtTime(0.2 * this.volume, now);
       masterGain.connect(ctx.destination);
 
-      if (type === 'beep') {
-        const osc = ctx.createOscillator();
-        osc.type = 'sine';
-        osc.frequency.setValueAtTime(880, now);
-        osc.connect(masterGain);
-        osc.start(now);
-        osc.stop(now + 0.15);
-      } else if (type === 'warning') {
-        // Dual ascending chime (C5 -> E5)
-        const notes = [523.25, 659.25];
-        notes.forEach((freq, idx) => {
-          const osc = ctx.createOscillator();
-          osc.type = 'sine';
-          osc.frequency.setValueAtTime(freq, now + idx * 0.12);
-          osc.connect(masterGain);
-          osc.start(now + idx * 0.12);
-          osc.stop(now + idx * 0.12 + 0.15);
-        });
-      } else if (type === 'drowsy') {
-        // Triple caution chime (E5 -> G5 -> E5)
-        const notes = [659.25, 783.99, 659.25];
-        notes.forEach((freq, idx) => {
-          const osc = ctx.createOscillator();
-          osc.type = 'triangle';
-          osc.frequency.setValueAtTime(freq, now + idx * 0.15);
-          osc.connect(masterGain);
-          osc.start(now + idx * 0.15);
-          osc.stop(now + idx * 0.15 + 0.18);
-        });
-      } else if (type === 'critical' || type === 'emergency') {
-        // High urgency siren (A5 -> C6 -> A5 -> C6 -> E6)
-        const notes = [880.00, 1046.50, 880.00, 1046.50, 1318.51];
-        notes.forEach((freq, idx) => {
-          const osc = ctx.createOscillator();
-          osc.type = 'sawtooth';
-          const noteGain = ctx.createGain();
-          noteGain.gain.setValueAtTime(0.2 * this.volume, now + idx * 0.1);
-          osc.frequency.setValueAtTime(freq, now + idx * 0.1);
-          osc.connect(noteGain);
-          noteGain.connect(masterGain);
-          osc.start(now + idx * 0.1);
-          osc.stop(now + idx * 0.1 + 0.12);
-        });
-      }
+      // Single short 0.15s tone per alert
+      const freqMap = {
+        beep: 880,
+        warning: 659.25,
+        drowsy: 783.99,
+        critical: 1046.50,
+        emergency: 1318.51,
+      };
+
+      const osc = ctx.createOscillator();
+      osc.type = type === 'critical' || type === 'emergency' ? 'sawtooth' : 'sine';
+      osc.frequency.setValueAtTime(freqMap[type] || 880, now);
+      osc.connect(masterGain);
+      osc.start(now);
+      osc.stop(now + 0.15);
     } catch (err) {
       console.warn('[VoiceAlerts] Web Audio chime playback notice:', err);
     }

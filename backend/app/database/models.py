@@ -43,3 +43,61 @@ class EmergencyContactModel(Base):
     phone = Column(String, nullable=False)
     notify_on_sos = Column(Boolean, default=True)
 
+# Mobile Camera Connect Database Tables
+class VerificationSessionModel(Base):
+    __tablename__ = "verification_sessions"
+
+    id = Column(String, primary_key=True)
+    email = Column(String, nullable=False)
+    code_hash = Column(String, nullable=False)
+    attempts = Column(Integer, default=0)
+    expires_at = Column(DateTime, nullable=False)
+    created_at = Column(DateTime, default=datetime.datetime.utcnow)
+    verified = Column(Boolean, default=False)
+
+class ConnectedDeviceModel(Base):
+    __tablename__ = "connected_devices"
+
+    id = Column(String, primary_key=True)
+    email = Column(String, nullable=False)
+    device_id = Column(String, nullable=False)
+    device_name = Column(String, default="Mobile Camera Device")
+    session_token = Column(String, nullable=False)
+    ip_address = Column(String, default="127.0.0.1")
+    status = Column(String, default="CONNECTED")
+    last_connected = Column(DateTime, default=datetime.datetime.utcnow)
+
+class CameraSessionModel(Base):
+    __tablename__ = "camera_sessions"
+
+    id = Column(String, primary_key=True)
+    session_token = Column(String, nullable=False)
+    device_id = Column(String, nullable=False)
+    resolution = Column(String, default="1920x1080")
+    fps = Column(Integer, default=30)
+    signal_strength = Column(String, default="EXCELLENT")
+    battery_pct = Column(Integer, default=95)
+    camera_facing = Column(String, default="environment")
+    is_recording = Column(Boolean, default=False)
+    started_at = Column(DateTime, default=datetime.datetime.utcnow)
+    expires_at = Column(DateTime, nullable=False)
+
+class ConnectionLogModel(Base):
+    __tablename__ = "connection_logs"
+
+    id = Column(String, primary_key=True)
+    device_id = Column(String, nullable=False)
+    event_type = Column(String, nullable=False)
+    message = Column(String, nullable=False)
+    timestamp = Column(DateTime, default=datetime.datetime.utcnow)
+
+class DeviceHistoryModel(Base):
+    __tablename__ = "device_history"
+
+    id = Column(String, primary_key=True)
+    email = Column(String, nullable=False)
+    device_id = Column(String, nullable=False)
+    device_name = Column(String, default="Mobile Camera Device")
+    last_ip = Column(String, default="127.0.0.1")
+    first_connected = Column(DateTime, default=datetime.datetime.utcnow)
+    last_connected = Column(DateTime, default=datetime.datetime.utcnow)
