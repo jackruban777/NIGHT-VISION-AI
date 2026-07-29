@@ -1,11 +1,21 @@
 const API_BASE_URL = import.meta.env.VITE_API_URL || '/api/v1';
+const DIRECT_BACKEND_URL = 'http://localhost:8000/api/v1';
 
 export interface DetectionResult {
   fps: number;
+  camera_fps?: number;
+  ai_fps?: number;
+  inference_time_ms?: number;
+  tracking_time_ms?: number;
+  model_name?: string;
+  device?: string;
+  resolution?: string;
+  active_objects_count?: number;
   night_enhance_applied: boolean;
   overall_risk: 'Low' | 'Medium' | 'High' | 'Critical';
   detections: {
     id: string;
+    track_id?: number | null;
     class: string;
     confidence: number;
     bbox: [number, number, number, number];
@@ -17,51 +27,49 @@ export interface DetectionResult {
       collision_probability: number;
     };
   }[];
+  telemetry?: {
+    cpu_usage_pct: number;
+    ram_usage_pct: number;
+    latency_ms: number;
+    tracking_ms?: number;
+  };
 }
 
 export const apiService = {
-  // Auth Endpoints
-  login: async (email: string, pass: string) => {
-    try {
-      const res = await fetch(`${API_BASE_URL}/auth/login`, {
-        method: 'POST',
-        headers: { 'Content-Type': 'application/json' },
-        body: JSON.stringify({ email, password: pass }),
-      });
-      return await res.json();
-    } catch (e) {
-      console.warn('Backend offline, using local auth fallback', e);
-      return null;
-    }
-  },
-
-  register: async (name: string, email: string, pass: string) => {
-    try {
-      const res = await fetch(`${API_BASE_URL}/auth/register`, {
-        method: 'POST',
-        headers: { 'Content-Type': 'application/json' },
-        body: JSON.stringify({ name, email, password: pass }),
-      });
-      return await res.json();
-    } catch (e) {
-      console.warn('Backend offline, using local auth fallback', e);
-      return null;
-    }
-  },
-
   // AI Detection Endpoint
   analyzeFrame: async (imageBlob: Blob, nightEnhance: boolean = true): Promise<DetectionResult | null> => {
     try {
       const formData = new FormData();
       formData.append('file', imageBlob, 'frame.jpg');
-      const res = await fetch(`${API_BASE_URL}/ai/detect?night_enhance=${nightEnhance}`, {
+      
+      let res = await fetch(`${API_BASE_URL}/ai/detect?night_enhance=${nightEnhance}`, {
         method: 'POST',
         body: formData,
       });
+
+      if (!res.ok) {
+        // Fallback to direct backend URL if proxy returns error
+        res = await fetch(`${DIRECT_BACKEND_URL}/ai/detect?night_enhance=${nightEnhance}`, {
+          method: 'POST',
+          body: formData,
+        });
+      }
+
       if (!res.ok) return null;
       return await res.json();
     } catch (e) {
-      return null;
+      try {
+        const formData = new FormData();
+        formData.append('file', imageBlob, 'frame.jpg');
+        const res = await fetch(`${DIRECT_BACKEND_URL}/ai/detect?night_enhance=${nightEnhance}`, {
+          method: 'POST',
+          body: formData,
+        });
+        if (!res.ok) return null;
+        return await res.json();
+      } catch (err) {
+        return null;
+      }
     }
   },
 

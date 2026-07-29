@@ -15,8 +15,22 @@ class Settings:
     # Database
     DATABASE_URL: str = os.getenv("DATABASE_URL", "sqlite:///./nightvision.db")
     
-    # AI Engine Defaults
-    DEFAULT_CONFIDENCE_THRESHOLD: float = 0.50
+    # High-Speed Real-Time AI Engine Defaults
+    PRIMARY_MODEL_NAME: str = "yolo11n.pt"  # YOLO11 Nano (Default)
+    FALLBACK_MODEL_NAME: str = "yolov8n.pt" # YOLOv8 Nano (Fallback)
+    DEFAULT_TRACKER: str = "bytetrack.yaml"  # ByteTrack persistent tracker
+    DEFAULT_CONFIDENCE_THRESHOLD: float = 0.20
+    DEFAULT_IOU_THRESHOLD: float = 0.45
+    FRAME_SKIP_INTERVAL: int = 5  # Run AI detection every 5th frame
+    BRIGHTNESS_THRESHOLD: float = 80.0  # Skip CLAHE if ambient brightness >= 80
+    
+    # Resolution Matrix based on Hardware
+    GPU_RESOLUTION: int = 640
+    LOW_GPU_RESOLUTION: int = 512
+    CPU_RESOLUTION: int = 416
+    LOW_CPU_RESOLUTION: int = 320
+    
+    # Camera Monocular Calibration
     CAMERA_FOCAL_LENGTH_PX: float = 800.0  # Simulated camera focal length in pixels
     AVERAGE_PEDESTRIAN_HEIGHT_M: float = 1.70  # Meters
     AVERAGE_CAR_HEIGHT_M: float = 1.50  # Meters

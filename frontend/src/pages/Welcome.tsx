@@ -1,23 +1,9 @@
-import React, { useState } from 'react';
+import React from 'react';
 import { useNavigate } from 'react-router-dom';
-import { Eye, ShieldAlert, LogIn, UserPlus, ArrowRight, Activity, Radio, BatteryCharging } from 'lucide-react';
-import { AuthModal } from '../components/AuthModal';
-import { useAuth } from '../context/AuthContext';
+import { Eye, ShieldAlert, ArrowRight, Activity, Radio, BatteryCharging } from 'lucide-react';
 
 export const Welcome: React.FC = () => {
   const navigate = useNavigate();
-  const { isAuthenticated } = useAuth();
-  const [authModalOpen, setAuthModalOpen] = useState(false);
-  const [authMode, setAuthMode] = useState<'login' | 'register'>('login');
-
-  const openAuth = (mode: 'login' | 'register') => {
-    if (isAuthenticated) {
-      navigate('/dashboard');
-    } else {
-      setAuthMode(mode);
-      setAuthModalOpen(true);
-    }
-  };
 
   return (
     <div className="min-h-screen bg-background text-on-background font-sans relative overflow-x-hidden">
@@ -48,12 +34,15 @@ export const Welcome: React.FC = () => {
           </div>
         </div>
 
-        <button
-          onClick={() => openAuth('login')}
-          className="bg-accent-electric text-on-primary-fixed px-6 py-2.5 rounded-xl font-label-caps text-xs font-bold uppercase tracking-wider hover:opacity-90 transition-all active:scale-95 shadow-[0_0_20px_rgba(0,229,255,0.3)]"
-        >
-          {isAuthenticated ? 'Enter Dashboard' : 'Driver Portal'}
-        </button>
+        <div className="flex items-center gap-3">
+          <button
+            onClick={() => navigate('/live-camera')}
+            className="bg-accent-electric text-black px-6 py-2.5 rounded-xl font-label-caps text-xs font-bold uppercase tracking-wider hover:opacity-90 transition-all active:scale-95 shadow-[0_0_20px_rgba(0,229,255,0.4)] flex items-center gap-2"
+          >
+            <Eye className="w-4 h-4" />
+            <span>Enter App</span>
+          </button>
+        </div>
       </header>
 
       <main className="relative pt-20">
@@ -107,18 +96,18 @@ export const Welcome: React.FC = () => {
 
               <div className="flex flex-col sm:flex-row items-center gap-4">
                 <button
-                  onClick={() => openAuth('login')}
-                  className="w-full sm:w-auto bg-on-surface text-background px-10 py-5 rounded-xl font-label-caps text-xs font-bold hover:bg-white transition-all active:scale-95 duration-100 flex items-center justify-center gap-3 ambient-glow uppercase tracking-wider"
+                  onClick={() => navigate('/live-camera')}
+                  className="w-full sm:w-auto bg-accent-electric text-black px-10 py-5 rounded-xl font-label-caps text-xs font-bold hover:bg-accent-electric/90 transition-all active:scale-95 duration-100 flex items-center justify-center gap-3 shadow-[0_0_25px_rgba(0,229,255,0.4)] uppercase tracking-wider"
                 >
-                  <span>Launch Driver Dashboard</span>
+                  <span>Launch Live AI Camera</span>
                   <ArrowRight className="w-4 h-4" />
                 </button>
                 <button
-                  onClick={() => openAuth('register')}
+                  onClick={() => navigate('/dashboard')}
                   className="w-full sm:w-auto bg-transparent text-on-surface px-10 py-5 rounded-xl font-label-caps text-xs font-bold border border-outline hover:bg-surface-container-high transition-all active:scale-95 duration-100 flex items-center justify-center gap-3 uppercase tracking-wider"
                 >
-                  <span>Create Account</span>
-                  <UserPlus className="w-4 h-4" />
+                  <span>Explore Dashboard</span>
+                  <ArrowRight className="w-4 h-4" />
                 </button>
               </div>
 
@@ -127,7 +116,7 @@ export const Welcome: React.FC = () => {
                   onClick={() => navigate('/dashboard')}
                   className="text-on-surface-variant font-label-caps text-xs hover:text-accent-electric transition-colors flex items-center gap-2 group uppercase tracking-wider"
                 >
-                  <span>Explore Demo Features</span>
+                  <span>Explore Tactical Dashboard</span>
                   <ArrowRight className="w-4 h-4 group-hover:translate-x-1 transition-transform" />
                 </button>
               </div>
@@ -192,9 +181,6 @@ export const Welcome: React.FC = () => {
           </div>
         </section>
       </main>
-
-      {/* Auth Modal */}
-      <AuthModal isOpen={authModalOpen} onClose={() => setAuthModalOpen(false)} initialMode={authMode} />
     </div>
   );
 };

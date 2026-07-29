@@ -44,7 +44,7 @@ class VoiceAlertService {
   public playSubtleBeep() {
     if (this.isMuted) return;
     const now = Date.now();
-    if (now - this.lastBeepTime < this.beepGapMs) return; // Enforce gap between beeps
+    if (now - this.lastBeepTime < this.beepGapMs) return;
     this.lastBeepTime = now;
 
     try {
@@ -55,9 +55,9 @@ class VoiceAlertService {
       const gain = ctx.createGain();
 
       osc.type = 'sine';
-      osc.frequency.setValueAtTime(880, ctx.currentTime); // 880Hz soft pitch
+      osc.frequency.setValueAtTime(880, ctx.currentTime);
       gain.gain.setValueAtTime(0.08 * this.volume, ctx.currentTime);
-      gain.gain.exponentialRampToValueAtTime(0.001, ctx.currentTime + 0.15); // 150ms gentle beep
+      gain.gain.exponentialRampToValueAtTime(0.001, ctx.currentTime + 0.15);
 
       osc.connect(gain);
       gain.connect(ctx.destination);
@@ -70,9 +70,7 @@ class VoiceAlertService {
   }
 
   /**
-   * Evaluates hazard distance and triggers:
-   * - A small subtle beep (with a gap) for routine/approaching hazards
-   * - Voice emergency speech ONLY when there is a true critical emergency (<15m & high confidence)
+   * Evaluates hazard distance for collision warning.
    */
   public evaluateHazard(
     objectId: string,
@@ -80,7 +78,6 @@ class VoiceAlertService {
     distanceMeters: number,
     confidence: number = 0.90
   ): { zone: DistanceZone; alertTriggered: boolean; message: string; isEmergency: boolean } {
-    // Only process accurate, high-confidence detections
     if (confidence < 0.80) {
       return { zone: 'safe', alertTriggered: false, message: '', isEmergency: false };
     }
@@ -96,7 +93,6 @@ class VoiceAlertService {
 
     const roundedDist = Math.round(distanceMeters);
 
-    // 1. Critical Danger (<15m): Speak "Go Slow" with hazard details
     if (currentZone === 'critical') {
       const isPedestrianOrAnimal = ['pedestrian', 'person', 'stray animal', 'animal', 'deer', 'dog'].includes(objectClass.toLowerCase());
       const warningText = isPedestrianOrAnimal
@@ -113,7 +109,6 @@ class VoiceAlertService {
       };
     }
 
-    // 2. Non-emergency hazards (caution/warning): Play a small beep with a 4-second gap. No voice speech!
     if (currentZone === 'caution' || currentZone === 'warning') {
       this.playSubtleBeep();
       const hudMsg = `${objectClass} in range: ${roundedDist}m`;
@@ -128,6 +123,46 @@ class VoiceAlertService {
     return { zone: 'safe', alertTriggered: false, message: '', isEmergency: false };
   }
 
+  /**
+   * 3-Tier Driver Monitoring System (DMS) Spoken Voice Alerts
+   */
+  public triggerDMSAlert(level: 1 | 2 | 3, customMessage?: string) {
+    if (this.isMuted) return;
+
+    let alertText = "";
+    let alertKey = `dms_level_${level}`;
+    let cooldown = 10000; // default 10s cooldown
+    let force = false;
+
+    if (level === 1) {
+      alertText = customMessage || "Please stay attentive.";
+      cooldown = 12000;
+      force = false;
+    } else if (level === 2) {
+      alertText = customMessage || "You appear drowsy. Please take a break.";
+      cooldown = 8000;
+      force = true;
+    } else if (level === 3) {
+      alertText = customMessage || "Critical fatigue detected. Stop driving immediately.";
+      cooldown = 5000;
+      force = true;
+    }
+
+    this.speakWithCooldown(alertText, alertKey, cooldown, force);
+  }
+
+  public speakWithCooldown(text: string, key: string, cooldownMs: number, force: boolean = false) {
+    if (this.isMuted) return;
+    const now = Date.now();
+
+    if (this.lastAlertTime[key] && now - this.lastAlertTime[key] < cooldownMs) {
+      return;
+    }
+
+    this.lastAlertTime[key] = now;
+    this.speak(text, key, force);
+  }
+
   public speak(text: string, key?: string, force: boolean = false) {
     if (this.isMuted) return;
     if (!('speechSynthesis' in window)) return;
@@ -135,7 +170,6 @@ class VoiceAlertService {
     const alertKey = key || text;
     const now = Date.now();
 
-    // Check cooldown to avoid repetitive speech
     if (!force && this.lastAlertTime[alertKey] && now - this.lastAlertTime[alertKey] < this.cooldownMs) {
       return;
     }

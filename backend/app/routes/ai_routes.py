@@ -3,7 +3,10 @@ import cv2
 import numpy as np
 import json
 import asyncio
+
 from app.ai.detector import hazard_detector
+from app.ai.driver_monitor import driver_monitor
+from app.ai.dms.dms_pipeline import dms_pipeline
 
 router = APIRouter(prefix="/ai", tags=["AI Perception"])
 
@@ -19,6 +22,26 @@ async def analyze_frame(file: UploadFile = File(...), night_enhance: bool = True
     result = hazard_detector.process_frame(frame, apply_night_enhance=night_enhance)
     return result
 
+@router.post("/dms/analyze")
+async def analyze_dms_frame(file: UploadFile = File(...), night_enhance: bool = True):
+    """
+    Production Driver Monitoring System (DMS) Single-Frame Analysis Endpoint.
+    Returns complete biometric telemetry (EAR, MAR, Head Pose, PERCLOS, Phone Distraction, Temporal Risk Score).
+    """
+    contents = await file.read()
+    nparr = np.frombuffer(contents, np.uint8)
+    frame = cv2.imdecode(nparr, cv2.IMREAD_COLOR)
+
+    if frame is None:
+        return {"error": "Invalid image payload"}
+
+    # Extract YOLO hazard detections to correlate phone objects
+    hazard_result = hazard_detector.process_frame(frame, apply_night_enhance=False)
+    yolo_dets = hazard_result.get("detections", [])
+
+    dms_result = dms_pipeline.process_frame(frame, apply_night_enhance=night_enhance, yolo_detections=yolo_dets)
+    return dms_result
+
 from pydantic import BaseModel, Field
 
 class DriverFatiguePayload(BaseModel):
@@ -28,8 +51,6 @@ class DriverFatiguePayload(BaseModel):
 
 @router.post("/driver-fatigue")
 def analyze_driver_fatigue(payload: DriverFatiguePayload):
-    from app.ai.driver_monitor import driver_monitor
-    
     calculated_ear = payload.ear
     if len(payload.eye_landmarks) >= 6:
         calculated_ear = driver_monitor.calculate_ear(payload.eye_landmarks)
@@ -42,12 +63,27 @@ async def stream_ai_detection(websocket: WebSocket):
     await websocket.accept()
     try:
         while True:
-            # Receive frame payload or request tick
             data = await websocket.receive_text()
-            # Send real-time hazard matrix telemetry back to client
             sample_frame = np.zeros((720, 1280, 3), dtype=np.uint8)
             result = hazard_detector.process_frame(sample_frame)
             await websocket.send_text(json.dumps(result))
-            await asyncio.sleep(0.05) # 20 FPS stream
+            await asyncio.sleep(0.05)
     except WebSocketDisconnect:
-        print("WebSocket client disconnected")
+        print("[WebSocket] AI Stream client disconnected")
+
+@router.websocket("/dms/ws")
+async def stream_dms_telemetry(websocket: WebSocket):
+    """
+    Real-Time DMS Telemetry Stream WebSocket (20-30 FPS).
+    """
+    await websocket.accept()
+    try:
+        while True:
+            data = await websocket.receive_text()
+            # Generate tick stream telemetry sample
+            sample_frame = np.zeros((480, 640, 3), dtype=np.uint8)
+            result = dms_pipeline.process_frame(sample_frame)
+            await websocket.send_text(json.dumps(result))
+            await asyncio.sleep(0.04) # 25 FPS
+    except WebSocketDisconnect:
+        print("[WebSocket] DMS Stream client disconnected")

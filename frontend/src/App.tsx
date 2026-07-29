@@ -6,6 +6,7 @@ import { Header } from './components/layout/Header';
 import { EmergencyModal } from './components/EmergencyModal';
 
 // Pages
+import { Welcome } from './pages/Welcome';
 import { LiveCamera } from './pages/LiveCamera';
 import { DriverMonitor } from './pages/DriverMonitor';
 import { Dashboard } from './pages/Dashboard';
@@ -19,7 +20,6 @@ const AppLayout: React.FC<{ children: React.ReactNode }> = ({ children }) => {
 
   const getPageTitle = (path: string) => {
     switch (path) {
-      case '/':
       case '/live-camera':
         return 'Live AI Camera Stream';
       case '/driver-monitor':
@@ -60,8 +60,11 @@ export const App: React.FC = () => {
   return (
     <EmergencyProvider>
       <Routes>
-        {/* Live Camera is #1 and the default landing page */}
-        <Route path="/" element={<AppLayout><LiveCamera /></AppLayout>} />
+        {/* Launch Page before entering into app */}
+        <Route path="/" element={<Welcome />} />
+        <Route path="/launch" element={<Welcome />} />
+
+        {/* Internal Application Pages */}
         <Route path="/live-camera" element={<AppLayout><LiveCamera /></AppLayout>} />
         <Route path="/driver-monitor" element={<AppLayout><DriverMonitor /></AppLayout>} />
         <Route path="/dashboard" element={<AppLayout><Dashboard /></AppLayout>} />

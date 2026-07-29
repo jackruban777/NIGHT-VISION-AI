@@ -1,4 +1,7 @@
 class CollisionPredictor:
+    def __init__(self):
+        self.alerted_tracks = {}
+
     def predict_risk(self, distance_m: float, relative_speed_kmh: float = 40.0) -> dict:
         """
         Calculates Time-To-Collision (TTC) in seconds:
@@ -27,5 +30,22 @@ class CollisionPredictor:
             "risk_level": risk_level,
             "collision_probability": collision_prob,
         }
+
+    def should_trigger_alert(self, track_id: str, risk_level: str) -> bool:
+        """
+        Suppresses duplicate alerts for the same tracked object within 4-second windows.
+        """
+        if risk_level not in ["High", "Critical"]:
+            return False
+
+        import time
+        now = time.time()
+        if track_id in self.alerted_tracks:
+            last_time = self.alerted_tracks[track_id]
+            if now - last_time < 4.0:
+                return False
+
+        self.alerted_tracks[track_id] = now
+        return True
 
 collision_predictor = CollisionPredictor()

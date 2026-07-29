@@ -1,6 +1,6 @@
 import React, { useState } from 'react';
 import { NavLink } from 'react-router-dom';
-import { Camera, UserCheck, Eye, BarChart3, Navigation, Bell, Settings, Activity, Cpu } from 'lucide-react';
+import { Home, Camera, UserCheck, Eye, BarChart3, Navigation, Bell, Settings, Activity, Cpu } from 'lucide-react';
 
 export const SidebarNav: React.FC = () => {
   const [isScanning, setIsScanning] = useState(false);
@@ -14,6 +14,7 @@ export const SidebarNav: React.FC = () => {
   };
 
   const navItems = [
+    { to: '/', label: '0. Launch Page', icon: Home },
     { to: '/live-camera', label: '1. Live AI Camera', icon: Camera },
     { to: '/driver-monitor', label: '2. Driver Fatigue Monitor', icon: UserCheck },
     { to: '/dashboard', label: '3. Tactical Dashboard', icon: Eye },

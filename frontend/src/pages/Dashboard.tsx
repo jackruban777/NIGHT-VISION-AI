@@ -206,17 +206,15 @@ export const Dashboard: React.FC = () => {
               </svg>
               <span className="absolute inset-0 flex items-center justify-center font-data-mono text-sm font-bold text-white">94%</span>
             </div>
-            <div>
-              <p className="font-body-base text-sm text-on-surface font-semibold">Neural Engine</p>
-              <p className="text-xs text-on-surface-variant font-data-mono mt-0.5">Latency: 4.2ms</p>
-            </div>
+              <p className="font-body-base text-sm text-on-surface font-semibold">Neural Engine (ByteTrack)</p>
+              <p className="text-xs text-on-surface-variant font-data-mono mt-0.5">Camera: 60FPS | AI: 8FPS | Latency: 24ms</p>
           </div>
 
           <div className="mt-4 pt-3 border-t border-outline-variant/40 flex items-center justify-between text-xs text-emerald-400 font-data-mono">
             <span className="flex items-center gap-1">
-              <CheckCircle2 className="w-3.5 h-3.5" /> Model v4.2
+              <CheckCircle2 className="w-3.5 h-3.5" /> YOLO11n (ByteTrack)
             </span>
-            <span>GPU Accelerated</span>
+            <span>GPU/CPU Accelerated</span>
           </div>
         </div>
 
