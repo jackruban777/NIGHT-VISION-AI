@@ -31,7 +31,7 @@ export const LiveCamera: React.FC = () => {
   const [backendConnected, setBackendConnected] = useState(false);
   const [detectedObjects, setDetectedObjects] = useState<DetectedObject[]>([]);
   const [alertLog, setAlertLog] = useState<{ id: string; text: string; time: string; level: string }[]>([]);
-  const [modelName, setModelName] = useState<string>('YOLO11n (ByteTrack)');
+  const [modelName, setModelName] = useState<string>('YOLO12 Nano (ByteTrack)');
   const [inferenceMs, setInferenceMs] = useState<number>(24.5);
   const [trackingMs, setTrackingMs] = useState<number>(1.2);
   const [aiFps, setAiFps] = useState<number>(8);

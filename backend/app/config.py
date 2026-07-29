@@ -15,12 +15,15 @@ class Settings:
     # Database
     DATABASE_URL: str = os.getenv("DATABASE_URL", "sqlite:///./nightvision.db")
     
-    # High-Speed Real-Time AI Engine Defaults
-    PRIMARY_MODEL_NAME: str = "yolo11n.pt"  # YOLO11 Nano
-    FALLBACK_MODEL_NAME: str = "yolov8n.pt" # YOLOv8 Nano
+    # High-Speed Real-Time AI Engine Defaults (YOLO12 Nano)
+    MODEL_NAME: str = "yolo12n.pt"
+    MODEL_PATH: str = os.getenv("YOLO12_MODEL_PATH", os.path.join(os.path.dirname(os.path.dirname(__file__)), "models", "yolo12n.pt"))
+    PRIMARY_MODEL_NAME: str = "yolo12n.pt"
     DEFAULT_TRACKER: str = "bytetrack.yaml"
-    DEFAULT_CONFIDENCE_THRESHOLD: float = 0.20
+    DEFAULT_CONFIDENCE_THRESHOLD: float = 0.40
     DEFAULT_IOU_THRESHOLD: float = 0.45
+    IMAGE_SIZE: int = 640
+    MAX_DETECTIONS: int = 100
     FRAME_SKIP_INTERVAL: int = 5
     BRIGHTNESS_THRESHOLD: float = 80.0
     

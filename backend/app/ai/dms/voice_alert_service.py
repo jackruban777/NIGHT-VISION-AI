@@ -3,11 +3,12 @@ from typing import Dict, Optional
 
 class VoiceAlertManager:
     """
-    Backend Voice Alert Manager with 3-Level Hierarchy and Cooldown Debouncing.
+    Backend Driver Monitoring System (DMS) Voice Alert Manager.
+    Enforces a strict 3-level alert hierarchy with configurable debouncing cooldown.
     
-    Level 1 (Score 31-60 or Looking Away): "Please stay attentive."
-    Level 2 (Score 61-80): "You appear drowsy. Please take a break."
-    Level 3 (Score 81-100 or Microsleep): "Critical fatigue detected. Stop driving immediately."
+    Level 1 (Tired/Distracted): "Please stay attentive."
+    Level 2 (Drowsy): "You appear drowsy. Please take a short break."
+    Level 3 (Critical Fatigue/Microsleep): "Critical fatigue detected. Please stop the vehicle immediately."
     """
     def __init__(self, cooldown_seconds: float = 6.0):
         self.cooldown_seconds = cooldown_seconds
@@ -22,21 +23,21 @@ class VoiceAlertManager:
         alert_key = None
 
         if is_driver_absent:
-            alert_text = "Driver not detected. Please take control."
+            alert_text = "Driver not detected. Please keep your eyes on the road."
             alert_level = 3
             alert_key = "driver_absent"
 
-        elif risk_tier == "Critical" or driver_state in ["Microsleep", "Sleeping"]:
-            alert_text = "Critical fatigue detected. Stop driving immediately."
+        elif risk_tier == "Critical" or driver_state in ["Microsleep", "Sleeping", "Critical Fatigue"]:
+            alert_text = "Critical fatigue detected. Please stop the vehicle immediately."
             alert_level = 3
             alert_key = "critical_fatigue"
 
-        elif risk_tier == "Drowsy" or driver_state == "Drowsy":
-            alert_text = "You appear drowsy. Please take a break."
+        elif risk_tier == "Drowsy" or driver_state in ["Drowsy", "Yawning Repeatedly"]:
+            alert_text = "You appear drowsy. Please take a short break."
             alert_level = 2
             alert_key = "drowsy_warning"
 
-        elif risk_tier == "Warning" or driver_state == "Slightly Drowsy":
+        elif risk_tier in ["Warning", "Caution"] or driver_state in ["Slightly Drowsy", "Looking Away", "Phone Distracted"]:
             alert_text = "Please stay attentive."
             alert_level = 1
             alert_key = "stay_attentive"
@@ -44,7 +45,6 @@ class VoiceAlertManager:
         if alert_text is None or alert_key is None:
             return None
 
-        # Check debouncing cooldown
         last_time = self.last_alert_time.get(alert_key, 0.0)
         time_since_last = current_time - last_time
 

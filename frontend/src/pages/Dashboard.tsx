@@ -212,7 +212,7 @@ export const Dashboard: React.FC = () => {
 
           <div className="mt-4 pt-3 border-t border-outline-variant/40 flex items-center justify-between text-xs text-emerald-400 font-data-mono">
             <span className="flex items-center gap-1">
-              <CheckCircle2 className="w-3.5 h-3.5" /> YOLO11n (ByteTrack)
+              <CheckCircle2 className="w-3.5 h-3.5" /> YOLO12 Nano (ByteTrack)
             </span>
             <span>GPU/CPU Accelerated</span>
           </div>
