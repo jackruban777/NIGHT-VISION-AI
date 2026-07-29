@@ -1,5 +1,5 @@
-from fastapi import APIRouter, WebSocket, WebSocketDisconnect, HTTPException, Depends
-from pydantic import BaseModel, EmailStr, Field
+from fastapi import APIRouter, WebSocket, WebSocketDisconnect, HTTPException
+from pydantic import BaseModel, Field
 from typing import Dict, Optional, List
 import json
 import asyncio
@@ -18,10 +18,10 @@ router = APIRouter(prefix="/mobile", tags=["Mobile Camera Connect"])
 
 # Pydantic Schemas
 class GenerateCodePayload(BaseModel):
-    email: EmailStr
+    email: str
 
 class VerifyCodePayload(BaseModel):
-    email: EmailStr
+    email: str
     code: str = Field(..., min_length=6, max_length=6)
 
 class CreateSessionPayload(BaseModel):
@@ -98,41 +98,35 @@ def create_camera_session(payload: CreateSessionPayload):
 
 @router.post("/disconnect")
 def disconnect_camera(payload: DisconnectPayload):
-    db = SessionLocal()
+    mobile_service.disconnect_session(payload.session_token)
     try:
-        session = db.query(CameraSessionModel).filter(CameraSessionModel.session_token == payload.session_token).first()
-        if session:
-            device = db.query(ConnectedDeviceModel).filter(ConnectedDeviceModel.session_token == payload.session_token).first()
-            if device:
-                device.status = "DISCONNECTED"
+        db = SessionLocal()
+        device = db.query(ConnectedDeviceModel).filter(ConnectedDeviceModel.session_token == payload.session_token).first()
+        if device:
+            device.status = "DISCONNECTED"
             db.commit()
-        return {"status": "disconnected", "message": "Mobile camera disconnected successfully."}
-    finally:
         db.close()
+    except Exception:
+        pass
+    return {"status": "disconnected", "message": "Mobile camera disconnected successfully."}
 
 @router.get("/status")
 def get_camera_status(session_token: str):
-    db = SessionLocal()
-    try:
-        session = db.query(CameraSessionModel).filter(CameraSessionModel.session_token == session_token).first()
-        if not session:
-            return {"connected": False, "status": "OFFLINE"}
-        
-        device = db.query(ConnectedDeviceModel).filter(ConnectedDeviceModel.session_token == session_token).first()
-        
+    # Primary: check in-memory session store
+    session = mobile_service.get_session(session_token)
+    if session:
         return {
             "connected": True,
-            "status": device.status if device else "ACTIVE",
-            "device_name": device.device_name if device else "Mobile Camera Device",
-            "resolution": session.resolution,
-            "fps": session.fps,
-            "signal_strength": session.signal_strength,
-            "battery_pct": session.battery_pct,
-            "camera_facing": session.camera_facing,
-            "is_recording": session.is_recording,
+            "status": session.get("status", "ACTIVE"),
+            "device_name": session.get("device_name", "Mobile Camera Device"),
+            "resolution": session.get("resolution", "1920x1080"),
+            "fps": session.get("fps", 30),
+            "signal_strength": session.get("signal_strength", "EXCELLENT"),
+            "battery_pct": session.get("battery_pct", 95),
+            "camera_facing": session.get("camera_facing", "environment"),
+            "is_recording": False,
         }
-    finally:
-        db.close()
+    return {"connected": False, "status": "OFFLINE"}
 
 @router.get("/devices")
 def get_connected_devices(email: str):
@@ -161,10 +155,8 @@ def switch_camera(payload: SwitchCameraPayload):
             session.camera_facing = payload.camera_facing
             db.commit()
         
-        # Notify connected WebSocket
-        asyncio.create_task(
-            signal_manager.send_signal(payload.session_token, "mobile", {"type": "switch_camera", "facing": payload.camera_facing})
-        )
+        # Update in-memory session facing
+        mobile_service.update_session(payload.session_token, {"camera_facing": payload.camera_facing})
         return {"status": "success", "camera_facing": payload.camera_facing}
     finally:
         db.close()
