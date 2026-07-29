@@ -1,0 +1,29 @@
+services:
+  # 1. FastAPI Python Backend Service
+  - type: web
+    name: nightvision-backend
+    env: python
+    region: singapore
+    plan: free
+    rootDir: backend
+    buildCommand: pip install -r requirements.txt
+    startCommand: uvicorn app.main:app --host 0.0.0.0 --port $PORT
+    envVars:
+      - key: DATABASE_URL
+        value: sqlite:///./nightvision.db
+      - key: SECRET_KEY
+        generateValue: true
+
+  # 2. React + Vite Frontend Static Site
+  - type: web
+    name: nightvision-frontend
+    env: static
+    region: singapore
+    plan: free
+    rootDir: frontend
+    buildCommand: npm install && npm run build
+    staticPublishPath: ./dist
+    routes:
+      - type: rewrite
+        source: /*
+        destination: /index.html
