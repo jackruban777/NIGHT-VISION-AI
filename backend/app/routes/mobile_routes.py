@@ -164,7 +164,7 @@ def switch_camera(payload: SwitchCameraPayload):
 @router.websocket("/ws/signal/{session_token}")
 async def rtc_signaling_stream(websocket: WebSocket, session_token: str, role: str = "mobile"):
     """
-    WebRTC PeerConnection Signaling & Fallback Binary JPEG Frame Receiver.
+    WebRTC PeerConnection Signaling & Dual Fallback Frame Receiver/Relay.
     Role can be 'mobile' (sender) or 'desktop' (receiver).
     """
     await signal_manager.connect(session_token, role, websocket)
@@ -172,13 +172,18 @@ async def rtc_signaling_stream(websocket: WebSocket, session_token: str, role: s
 
     try:
         while True:
-            # Handle text messages (WebRTC offer/answer/ICE candidate JSON)
-            data_text = await websocket.receive_text()
-            try:
-                msg = json.loads(data_text)
-                await signal_manager.send_signal(session_token, target_role, msg)
-            except json.JSONDecodeError:
-                pass
+            # Handle both JSON text signaling and raw binary JPEG frames
+            message = await websocket.receive()
+            if "text" in message and message["text"]:
+                try:
+                    msg = json.loads(message["text"])
+                    await signal_manager.send_signal(session_token, target_role, msg)
+                except json.JSONDecodeError:
+                    pass
+            elif "bytes" in message and message["bytes"]:
+                raw_data = message["bytes"]
+                signal_manager.latest_frames[session_token] = raw_data
+                await signal_manager.send_bytes(session_token, target_role, raw_data)
     except WebSocketDisconnect:
         signal_manager.disconnect(session_token, role)
         print(f"[SignalManager] {role.upper()} disconnected for session {session_token[:12]}")

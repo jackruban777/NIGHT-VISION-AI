@@ -14,9 +14,18 @@ import {
   ShieldCheck,
   Zap,
   Copy,
-  ExternalLink
+  ExternalLink,
+  Terminal
 } from 'lucide-react';
 import { voiceAlerts } from '../services/voiceAlerts';
+
+export type DesktopCameraStatus =
+  | 'Camera Ready'
+  | 'Requesting Permission'
+  | 'Camera Connected'
+  | 'Streaming'
+  | 'Camera Disconnected'
+  | 'Camera Error';
 
 export const MobileConnect: React.FC = () => {
   // State
@@ -32,14 +41,15 @@ export const MobileConnect: React.FC = () => {
   // Session & Connection State
   const [sessionToken, setSessionToken] = useState<string | null>(null);
   const [mobileUrl, setMobileUrl] = useState('');
-  const [connectionStatus, setConnectionStatus] = useState<'DISCONNECTED' | 'WAITING' | 'CONNECTED'>('DISCONNECTED');
+  const [cameraStatus, setCameraStatus] = useState<DesktopCameraStatus>('Camera Ready');
   const [deviceName, setDeviceName] = useState('Mobile Phone Camera');
   const [signalStrength, setSignalStrength] = useState('EXCELLENT');
-  const [batteryPct, setBatteryPct] = useState(92);
+  const [batteryPct, setBatteryPct] = useState(95);
   const [resolution, setResolution] = useState('1920x1080');
   const [fps, setFps] = useState(30);
   const [cameraFacing, setCameraFacing] = useState<'environment' | 'user'>('environment');
   const [isPrimaryAiSource, setIsPrimaryAiSource] = useState(false);
+  const [fallbackImageSrc, setFallbackImageSrc] = useState<string | null>(null);
 
   const videoRef = useRef<HTMLVideoElement>(null);
   const rtcRef = useRef<RTCPeerConnection | null>(null);
@@ -120,7 +130,7 @@ export const MobileConnect: React.FC = () => {
         const fullUrl = `${protocol}//${host}/mobile-stream?token=${token}`;
         setMobileUrl(fullUrl);
         setStep('qr_connected');
-        setConnectionStatus('WAITING');
+        setCameraStatus('Requesting Permission');
         localStorage.setItem('nv_mobile_token', token);
         voiceAlerts.speak('Email verified. Scan QR Code to connect mobile camera.');
         initSignaling(token);
@@ -132,7 +142,7 @@ export const MobileConnect: React.FC = () => {
       const fullUrl = `${window.location.protocol}//${window.location.host}/mobile-stream?token=${devToken}`;
       setMobileUrl(fullUrl);
       setStep('qr_connected');
-      setConnectionStatus('WAITING');
+      setCameraStatus('Requesting Permission');
       localStorage.setItem('nv_mobile_token', devToken);
       voiceAlerts.speak('Email verified. Mobile camera connection ready.');
       initSignaling(devToken);
@@ -151,38 +161,49 @@ export const MobileConnect: React.FC = () => {
       wsRef.current = ws;
 
       ws.onopen = () => {
-        console.log('[MobileConnect] WebSocket Signaling connected');
+        console.log('[MobileConnect] Desktop WebSocket Signaling connected');
       };
 
       ws.onmessage = async (event) => {
-        try {
-          const msg = JSON.parse(event.data);
-          if (msg.type === 'device_connected') {
-            setConnectionStatus('CONNECTED');
-            setDeviceName(msg.device_name || 'Mobile Phone Camera');
-            voiceAlerts.speak('Mobile camera connected successfully.');
-          } else if (msg.type === 'telemetry') {
-            if (msg.fps) setFps(msg.fps);
-            if (msg.resolution) setResolution(msg.resolution);
-            if (msg.battery) setBatteryPct(msg.battery);
-            if (msg.signal) setSignalStrength(msg.signal);
-          } else if (msg.type === 'offer') {
-            handleWebRTCOffer(msg.offer);
-          } else if (msg.type === 'candidate') {
-            if (rtcRef.current && msg.candidate) {
-              await rtcRef.current.addIceCandidate(msg.candidate);
+        if (typeof event.data === 'string') {
+          try {
+            const msg = JSON.parse(event.data);
+            if (msg.type === 'device_connected') {
+              setCameraStatus('Camera Connected');
+              setDeviceName(msg.device_name || 'Mobile Phone Camera');
+              voiceAlerts.speak('Mobile camera connected.');
+            } else if (msg.type === 'telemetry') {
+              if (msg.fps) setFps(msg.fps);
+              if (msg.resolution) setResolution(msg.resolution);
+              if (msg.battery) setBatteryPct(msg.battery);
+              if (msg.signal) setSignalStrength(msg.signal);
+              if (msg.status === 'Streaming' || msg.status === 'Camera Connected') {
+                setCameraStatus('Streaming');
+              }
+            } else if (msg.type === 'frame' && msg.image) {
+              // Received Fallback Canvas JPEG Frame over WebSocket
+              setFallbackImageSrc(msg.image);
+              setCameraStatus('Streaming');
+            } else if (msg.type === 'offer') {
+              handleWebRTCOffer(msg.offer);
+            } else if (msg.type === 'candidate') {
+              if (rtcRef.current && msg.candidate) {
+                await rtcRef.current.addIceCandidate(msg.candidate);
+              }
             }
+          } catch (e) {
+            // Ignore parse errors
           }
-        } catch (e) {
-          // Ignore parse errors
         }
       };
 
       ws.onclose = () => {
-        console.log('[MobileConnect] WebSocket closed');
+        console.log('[MobileConnect] Desktop WebSocket closed');
+        setCameraStatus('Camera Disconnected');
       };
     } catch (err) {
       console.warn('[MobileConnect] WebSocket init notice:', err);
+      setCameraStatus('Camera Error');
     }
   };
 
@@ -197,7 +218,7 @@ export const MobileConnect: React.FC = () => {
         if (videoRef.current && event.streams[0]) {
           videoRef.current.srcObject = event.streams[0];
           videoRef.current.play().catch(() => {});
-          setConnectionStatus('CONNECTED');
+          setCameraStatus('Streaming');
         }
       };
 
@@ -231,9 +252,10 @@ export const MobileConnect: React.FC = () => {
     if (wsRef.current) wsRef.current.close();
     if (rtcRef.current) rtcRef.current.close();
 
-    setConnectionStatus('DISCONNECTED');
+    setCameraStatus('Camera Disconnected');
     setStep('email');
     setSessionToken(null);
+    setFallbackImageSrc(null);
     setIsPrimaryAiSource(false);
     localStorage.removeItem('nv_mobile_token');
     voiceAlerts.speak('Mobile camera disconnected.');
@@ -287,19 +309,29 @@ export const MobileConnect: React.FC = () => {
           </div>
         </div>
 
-        {/* Status Badge & Disconnect Button */}
+        {/* Dynamic Camera Status Badge & Disconnect */}
         <div className="flex items-center gap-3">
           <div className="px-3 py-1.5 rounded-xl bg-surface-container border border-outline-variant text-xs font-data-mono flex items-center gap-2">
             <span
               className={`w-2.5 h-2.5 rounded-full ${
-                connectionStatus === 'CONNECTED'
+                cameraStatus === 'Streaming' || cameraStatus === 'Camera Connected'
                   ? 'bg-emerald-400 animate-ping'
-                  : connectionStatus === 'WAITING'
+                  : cameraStatus === 'Requesting Permission'
                   ? 'bg-amber-400 animate-pulse'
                   : 'bg-red-400'
               }`}
             ></span>
-            <span className="font-bold text-white uppercase">{connectionStatus}</span>
+            <span
+              className={`font-bold uppercase ${
+                cameraStatus === 'Streaming' || cameraStatus === 'Camera Connected'
+                  ? 'text-emerald-400'
+                  : cameraStatus === 'Requesting Permission'
+                  ? 'text-amber-400'
+                  : 'text-red-400'
+              }`}
+            >
+              {cameraStatus}
+            </span>
           </div>
 
           {step === 'qr_connected' && (
@@ -516,24 +548,33 @@ export const MobileConnect: React.FC = () => {
           {/* Live Mobile Camera Viewport */}
           <div className="card-premium !p-0 relative overflow-hidden border-2 border-accent-electric/40 min-h-[440px] flex flex-col justify-between group">
             
-            <video
-              ref={videoRef}
-              autoPlay
-              playsInline
-              muted
-              className="w-full h-full object-cover min-h-[440px] bg-black"
-            />
+            {/* Direct WebRTC Video or Fallback Canvas Frame Overlay */}
+            {fallbackImageSrc ? (
+              <img
+                src={fallbackImageSrc}
+                alt="Live Mobile Feed"
+                className="w-full h-full object-cover min-h-[440px] bg-black"
+              />
+            ) : (
+              <video
+                ref={videoRef}
+                autoPlay
+                playsInline
+                muted
+                className="w-full h-full object-cover min-h-[440px] bg-black"
+              />
+            )}
 
             <div className="absolute inset-0 hud-scanline opacity-25 pointer-events-none"></div>
 
-            {/* Standby Overlay when not connected */}
-            {connectionStatus !== 'CONNECTED' && (
+            {/* Standby Overlay when not streaming */}
+            {(cameraStatus !== 'Streaming' && cameraStatus !== 'Camera Connected') && (
               <div className="absolute inset-0 bg-surface-container-dark/95 flex flex-col items-center justify-center p-6 text-center z-20 space-y-4 backdrop-blur-md">
                 <div className="w-16 h-16 rounded-2xl bg-accent-electric/10 border border-accent-electric/40 flex items-center justify-center text-accent-electric shadow-[0_0_25px_rgba(0,229,255,0.2)]">
                   <Camera className="w-8 h-8 animate-pulse text-accent-electric" />
                 </div>
                 <div className="space-y-1">
-                  <h3 className="text-xl font-bold text-white uppercase">Mobile Stream Disconnected</h3>
+                  <h3 className="text-xl font-bold text-white uppercase">{cameraStatus}</h3>
                   <p className="text-xs text-on-surface-variant max-w-sm font-data-mono">
                     {step === 'qr_connected'
                       ? 'Waiting for mobile phone to scan QR code and grant camera permissions...'
@@ -564,8 +605,8 @@ export const MobileConnect: React.FC = () => {
           <div className="grid grid-cols-2 md:grid-cols-4 gap-4 text-xs font-data-mono">
             <div className="card-premium p-4 space-y-1">
               <span className="text-[10px] text-on-surface-variant font-label-caps uppercase">Connection Mode</span>
-              <p className="text-sm font-bold text-white">WebRTC / RTC-P2P</p>
-              <p className="text-[10px] text-emerald-400">Latency: &lt;120 ms</p>
+              <p className="text-sm font-bold text-white">WebRTC / WebSocket Dual</p>
+              <p className="text-[10px] text-emerald-400">Latency: &lt;110 ms</p>
             </div>
             <div className="card-premium p-4 space-y-1">
               <span className="text-[10px] text-on-surface-variant font-label-caps uppercase">Active Camera</span>

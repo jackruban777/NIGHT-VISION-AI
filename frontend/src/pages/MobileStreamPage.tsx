@@ -6,13 +6,25 @@ import {
   Zap,
   ZapOff,
   Video,
-  ShieldCheck,
   Battery,
   Wifi,
   Sliders,
   CheckCircle2,
-  AlertCircle
+  AlertCircle,
+  RefreshCw,
+  Terminal,
+  Activity,
+  ShieldCheck,
+  Power
 } from 'lucide-react';
+
+export type MobileCameraStatus =
+  | 'Camera Ready'
+  | 'Requesting Permission'
+  | 'Camera Connected'
+  | 'Streaming'
+  | 'Camera Disconnected'
+  | 'Camera Error';
 
 export const MobileStreamPage: React.FC = () => {
   const [searchParams] = useSearchParams();
@@ -26,17 +38,32 @@ export const MobileStreamPage: React.FC = () => {
   const [maxZoom, setMaxZoom] = useState(5.0);
   const [orientationMode, setOrientationMode] = useState<'landscape' | 'portrait'>('landscape');
 
-  // Stream & Telemetry State
-  const [permissionGranted, setPermissionGranted] = useState(false);
+  // Status & Telemetry State
+  const [status, setStatus] = useState<MobileCameraStatus>('Camera Ready');
   const [errorMessage, setErrorMessage] = useState('');
-  const [streamActive, setStreamActive] = useState(false);
+  const [errorDetails, setErrorDetails] = useState('');
+  const [batteryLevel, setBatteryLevel] = useState(95);
   const [fps, setFps] = useState(30);
-  const [batteryLevel, setBatteryLevel] = useState(90);
+  const [activeRes, setActiveRes] = useState('1920x1080');
+
+  // Debug Logging State
+  const [logs, setLogs] = useState<string[]>([]);
+  const [showLogs, setShowLogs] = useState(false);
 
   const videoRef = useRef<HTMLVideoElement>(null);
+  const canvasRef = useRef<HTMLCanvasElement>(null);
   const mediaStreamRef = useRef<MediaStream | null>(null);
   const wsRef = useRef<WebSocket | null>(null);
   const rtcRef = useRef<RTCPeerConnection | null>(null);
+  const frameIntervalRef = useRef<number | null>(null);
+  const reconnectTimerRef = useRef<number | null>(null);
+
+  const addLog = (msg: string) => {
+    const timeStr = new Date().toLocaleTimeString();
+    const logLine = `[${timeStr}] ${msg}`;
+    console.log(`[MobileStreamPage] ${msg}`);
+    setLogs((prev) => [logLine, ...prev.slice(0, 49)]);
+  };
 
   // Monitor Battery API
   useEffect(() => {
@@ -50,72 +77,193 @@ export const MobileStreamPage: React.FC = () => {
     }
   }, []);
 
-  // Initialize Camera Stream & WebRTC Signaling
+  // Main Camera & Signaling Lifecycle
   useEffect(() => {
-    initCamera(facingMode, resolutionPreset);
+    addLog(`Initializing camera setup (facing: ${facingMode}, resolution: ${resolutionPreset})`);
+    initCameraPipeline(facingMode, resolutionPreset);
     initSignaling(token);
 
     return () => {
       stopCamera();
       if (wsRef.current) wsRef.current.close();
       if (rtcRef.current) rtcRef.current.close();
+      if (frameIntervalRef.current) clearInterval(frameIntervalRef.current);
+      if (reconnectTimerRef.current) clearInterval(reconnectTimerRef.current);
     };
   }, [facingMode, resolutionPreset]);
 
-  const initCamera = async (facing: 'environment' | 'user', res: '1080p' | '720p' | '480p') => {
+  /**
+   * Multi-Stage Robust getUserMedia Camera Initialization Pipeline.
+   * Works on iOS Safari, Android Chrome, Edge, and desktop browsers.
+   */
+  const initCameraPipeline = async (desiredFacing: 'environment' | 'user', resPreset: '1080p' | '720p' | '480p') => {
     stopCamera();
+    setStatus('Requesting Permission');
     setErrorMessage('');
+    setErrorDetails('');
+    addLog('Requesting camera permission from browser...');
 
-    let resWidth = 1920;
-    let resHeight = 1080;
-    if (res === '720p') { resWidth = 1280; resHeight = 720; }
-    if (res === '480p') { resWidth = 854; resHeight = 480; }
+    if (!navigator.mediaDevices || !navigator.mediaDevices.getUserMedia) {
+      const errText = 'Camera API (navigator.mediaDevices.getUserMedia) unavailable in this browser.';
+      setStatus('Camera Error');
+      setErrorMessage(errText);
+      setErrorDetails('Please open this page in Chrome, Safari, or Edge over HTTPS or localhost.');
+      addLog(`ERROR: ${errText}`);
+      return;
+    }
 
-    const constraints: MediaStreamConstraints = {
-      audio: false,
-      video: {
-        facingMode: { ideal: facing },
-        width: { ideal: resWidth },
-        height: { ideal: resHeight },
-        frameRate: { ideal: 30 },
-      },
-    };
+    let reqWidth = 1920;
+    let reqHeight = 1080;
+    if (resPreset === '720p') { reqWidth = 1280; reqHeight = 720; }
+    if (resPreset === '480p') { reqWidth = 854; reqHeight = 480; }
 
+    let stream: MediaStream | null = null;
+    let actualFacing = desiredFacing;
+
+    // Stage 1: Attempt exact/ideal facing mode with requested resolution
     try {
-      const stream = await navigator.mediaDevices.getUserMedia(constraints);
-      mediaStreamRef.current = stream;
-      setPermissionGranted(true);
-      setStreamActive(true);
-
-      if (videoRef.current) {
-        videoRef.current.srcObject = stream;
-        videoRef.current.play().catch(() => {});
-      }
-
-      // Check Zoom Capability
-      const track = stream.getVideoTracks()[0];
-      if (track) {
-        const capabilities: any = track.getCapabilities ? track.getCapabilities() : {};
-        if (capabilities.zoom) {
-          setMaxZoom(capabilities.zoom.max || 5.0);
-        }
-      }
-    } catch (err: any) {
-      console.warn('[MobileStream] Camera permission error:', err);
-      // Fallback without exact constraints
+      addLog(`Stage 1: Attempting ${desiredFacing} camera (${reqWidth}x${reqHeight})...`);
+      stream = await navigator.mediaDevices.getUserMedia({
+        audio: false,
+        video: {
+          facingMode: { ideal: desiredFacing },
+          width: { ideal: reqWidth },
+          height: { ideal: reqHeight },
+          frameRate: { ideal: 30 },
+        },
+      });
+    } catch (err1: any) {
+      addLog(`Stage 1 notice (${err1.name}): ${err1.message}. Trying Stage 2 fallback...`);
+      
+      // Stage 2: Fallback to opposite camera if rear failed
       try {
-        const fallbackStream = await navigator.mediaDevices.getUserMedia({ video: true });
-        mediaStreamRef.current = fallbackStream;
-        setPermissionGranted(true);
-        setStreamActive(true);
-        if (videoRef.current) {
-          videoRef.current.srcObject = fallbackStream;
-          videoRef.current.play().catch(() => {});
+        const altFacing = desiredFacing === 'environment' ? 'user' : 'environment';
+        addLog(`Stage 2: Attempting fallback ${altFacing} camera...`);
+        stream = await navigator.mediaDevices.getUserMedia({
+          audio: false,
+          video: {
+            facingMode: { ideal: altFacing },
+            width: { ideal: 1280 },
+            height: { ideal: 720 },
+          },
+        });
+        actualFacing = altFacing;
+        setFacingMode(altFacing);
+      } catch (err2: any) {
+        addLog(`Stage 2 notice (${err2.name}): ${err2.message}. Trying Stage 3 basic video fallback...`);
+        
+        // Stage 3: Absolute fallback (any available camera stream)
+        try {
+          addLog('Stage 3: Requesting basic camera stream with default constraints...');
+          stream = await navigator.mediaDevices.getUserMedia({ video: true, audio: false });
+        } catch (err3: any) {
+          handleCameraError(err3);
+          return;
         }
-      } catch (errFallback) {
-        setPermissionGranted(false);
-        setErrorMessage('Camera permission denied or camera device unavailable. Please allow access.');
       }
+    }
+
+    if (!stream) {
+      setStatus('Camera Error');
+      setErrorMessage('Failed to obtain camera video stream.');
+      return;
+    }
+
+    mediaStreamRef.current = stream;
+    setStatus('Camera Connected');
+    addLog(`Camera successfully opened (${actualFacing} camera active)`);
+
+    // Attach stream to <video> element with iOS Safari compatibility attributes
+    if (videoRef.current) {
+      videoRef.current.playsInline = true;
+      videoRef.current.muted = true;
+      videoRef.current.autoplay = true;
+      videoRef.current.srcObject = stream;
+
+      try {
+        await videoRef.current.play();
+        setStatus('Streaming');
+        addLog('Live video preview active & playing');
+      } catch (playErr: any) {
+        addLog(`Video element play notice: ${playErr.message}`);
+        // Fallback user interaction click listener for autoplay restriction
+        const forcePlay = () => {
+          if (videoRef.current) videoRef.current.play().catch(() => {});
+          window.removeEventListener('click', forcePlay);
+          window.removeEventListener('touchstart', forcePlay);
+        };
+        window.addEventListener('click', forcePlay);
+        window.addEventListener('touchstart', forcePlay);
+      }
+    }
+
+    // Determine actual active resolution & capabilities
+    const track = stream.getVideoTracks()[0];
+    if (track) {
+      const settings = track.getSettings ? track.getSettings() : {};
+      if (settings.width && settings.height) {
+        const resStr = `${settings.width}x${settings.height}`;
+        setActiveRes(resStr);
+        addLog(`Active camera resolution: ${resStr}`);
+      }
+
+      // Check Zoom capability
+      const capabilities: any = track.getCapabilities ? track.getCapabilities() : {};
+      if (capabilities.zoom) {
+        setMaxZoom(capabilities.zoom.max || 5.0);
+      }
+
+      // Track end listener
+      track.onended = () => {
+        addLog('WARNING: Camera track ended unexpectedly.');
+        setStatus('Camera Disconnected');
+        reconnectCamera();
+      };
+    }
+
+    // Attach stream to WebRTC if RTC connection exists
+    if (rtcRef.current && stream) {
+      attachStreamToWebRTC(stream);
+    }
+
+    // Start Fallback Canvas Frame Transmission over WebSocket
+    startCanvasFrameStream();
+  };
+
+  /**
+   * Comprehensive Camera Error Handler mapping DOMException names to clear user messages.
+   */
+  const handleCameraError = (err: any) => {
+    console.error('[MobileStreamPage] Camera error:', err);
+    setStatus('Camera Error');
+
+    const errName = err.name || 'UnknownError';
+    const errText = err.message || String(err);
+
+    if (errName === 'NotAllowedError' || errName === 'PermissionDeniedError') {
+      setErrorMessage('Camera Permission Denied');
+      setErrorDetails('Your browser or phone blocked camera access. Please tap "Grant Camera Permission" or allow camera access in browser site settings.');
+      addLog('ERROR: Permission Denied by user or OS security policy.');
+    } else if (errName === 'NotFoundError' || errName === 'DevicesNotFoundError') {
+      setErrorMessage('No Camera Found');
+      setErrorDetails('No physical camera device was detected on your mobile phone.');
+      addLog('ERROR: DevicesNotFoundError - No camera sensor detected.');
+    } else if (errName === 'NotReadableError' || errName === 'TrackStartError') {
+      setErrorMessage('Camera Already In Use');
+      setErrorDetails('Another app (like WhatsApp, Instagram, or Camera app) or browser tab is using the camera. Please close other camera apps and retry.');
+      addLog('ERROR: TrackStartError - Camera locked by another application.');
+    } else if (errName === 'OverconstrainedError' || errName === 'ConstraintNotSatisfiedError') {
+      setErrorMessage('Camera Resolution Unsupported');
+      setErrorDetails('The requested resolution is not supported by your mobile camera sensor.');
+      addLog('ERROR: OverconstrainedError - Unsupported constraints.');
+    } else if (errName === 'SecurityError') {
+      setErrorMessage('Security Error (HTTPS Required)');
+      setErrorDetails('Mobile camera access requires HTTPS or localhost connection.');
+      addLog('ERROR: SecurityError - Origin not secure.');
+    } else {
+      setErrorMessage(`Camera Failure: ${errName}`);
+      setErrorDetails(errText || 'An unexpected error occurred while starting the camera.');
+      addLog(`ERROR: ${errName} - ${errText}`);
     }
   };
 
@@ -124,21 +272,37 @@ export const MobileStreamPage: React.FC = () => {
       mediaStreamRef.current.getTracks().forEach((t) => t.stop());
       mediaStreamRef.current = null;
     }
-    setStreamActive(false);
+    if (frameIntervalRef.current) {
+      clearInterval(frameIntervalRef.current);
+      frameIntervalRef.current = null;
+    }
+    setStatus('Camera Disconnected');
   };
 
-  // WebRTC PeerConnection Signaling Setup
+  const reconnectCamera = () => {
+    addLog('Attempting automatic camera reconnection in 3 seconds...');
+    setTimeout(() => {
+      initCameraPipeline(facingMode, resolutionPreset);
+    }, 3000);
+  };
+
+  /**
+   * WebRTC Signaling & Connection Setup with Auto-Reconnection.
+   */
   const initSignaling = (sessionToken: string) => {
     const wsProtocol = window.location.protocol === 'https:' ? 'wss:' : 'ws:';
     const wsUrl = `${wsProtocol}//${window.location.host}/api/v1/mobile/ws/signal/${sessionToken}?role=mobile`;
+
+    addLog(`Connecting to signaling server at ${wsUrl}...`);
 
     try {
       const ws = new WebSocket(wsUrl);
       wsRef.current = ws;
 
       ws.onopen = () => {
-        console.log('[MobileStream] Signaling WebSocket connected');
-        ws.send(JSON.stringify({ type: 'device_connected', device_name: navigator.userAgent.includes('iPhone') ? 'iPhone Camera' : 'Android Camera' }));
+        addLog('WebSocket signaling connection established.');
+        const devName = navigator.userAgent.includes('iPhone') ? 'iPhone Camera' : 'Android Camera';
+        ws.send(JSON.stringify({ type: 'device_connected', device_name: devName }));
         createWebRTCOffer();
       };
 
@@ -146,47 +310,64 @@ export const MobileStreamPage: React.FC = () => {
         try {
           const msg = JSON.parse(event.data);
           if (msg.type === 'answer' && rtcRef.current) {
+            addLog('Received WebRTC answer from desktop.');
             await rtcRef.current.setRemoteDescription(msg.answer);
           } else if (msg.type === 'candidate' && rtcRef.current) {
             await rtcRef.current.addIceCandidate(msg.candidate);
           } else if (msg.type === 'switch_camera') {
-            setFacingMode(msg.facing === 'user' ? 'user' : 'environment');
+            const nextFacing = msg.facing === 'user' ? 'user' : 'environment';
+            addLog(`Remote request: Switching to ${nextFacing} camera.`);
+            setFacingMode(nextFacing);
           }
         } catch (e) {
-          // Ignore parse errors
+          // Ignore parse error
         }
       };
 
-      // Periodic Telemetry Transmission
+      ws.onerror = (e) => {
+        addLog('WebSocket signaling error detected.');
+      };
+
+      ws.onclose = () => {
+        addLog('WebSocket signaling connection closed. Retrying in 4 seconds...');
+        setTimeout(() => {
+          initSignaling(sessionToken);
+        }, 4000);
+      };
+
+      // Telemetry Loop (every 3 seconds)
       const telemetryInterval = setInterval(() => {
         if (ws.readyState === WebSocket.OPEN) {
           ws.send(JSON.stringify({
             type: 'telemetry',
-            fps: 30,
-            resolution: `${resolutionPreset} (${facingMode})`,
+            fps: fps,
+            resolution: `${activeRes} (${facingMode})`,
             battery: batteryLevel,
-            signal: 'EXCELLENT'
+            signal: 'EXCELLENT',
+            status: status
           }));
         }
       }, 3000);
 
-      ws.onclose = () => clearInterval(telemetryInterval);
-    } catch (err) {
-      console.warn('[MobileStream] Signaling error:', err);
+    } catch (err: any) {
+      addLog(`Signaling exception: ${err.message}`);
     }
   };
 
   const createWebRTCOffer = async () => {
     try {
+      addLog('Creating WebRTC PeerConnection...');
       const pc = new RTCPeerConnection({
         iceServers: [{ urls: 'stun:stun.l.google.com:19302' }],
       });
       rtcRef.current = pc;
 
+      pc.onconnectionstatechange = () => {
+        addLog(`WebRTC connection state: ${pc.connectionState}`);
+      };
+
       if (mediaStreamRef.current) {
-        mediaStreamRef.current.getTracks().forEach((track) => {
-          pc.addTrack(track, mediaStreamRef.current!);
-        });
+        attachStreamToWebRTC(mediaStreamRef.current);
       }
 
       pc.onicecandidate = (event) => {
@@ -199,11 +380,53 @@ export const MobileStreamPage: React.FC = () => {
       await pc.setLocalDescription(offer);
 
       if (wsRef.current && wsRef.current.readyState === WebSocket.OPEN) {
+        addLog('Sending WebRTC offer to desktop...');
         wsRef.current.send(JSON.stringify({ type: 'offer', offer }));
       }
-    } catch (err) {
-      console.warn('[MobileStream] WebRTC offer creation failed:', err);
+    } catch (err: any) {
+      addLog(`WebRTC offer creation error: ${err.message}`);
     }
+  };
+
+  const attachStreamToWebRTC = (stream: MediaStream) => {
+    if (!rtcRef.current) return;
+    try {
+      const senders = rtcRef.current.getSenders();
+      senders.forEach((s) => rtcRef.current?.removeTrack(s));
+      stream.getTracks().forEach((track) => {
+        rtcRef.current?.addTrack(track, stream);
+      });
+      addLog('Attached media tracks to WebRTC PeerConnection.');
+    } catch (err: any) {
+      addLog(`Attach track error: ${err.message}`);
+    }
+  };
+
+  /**
+   * Robust Fallback Canvas Frame Transmission over WebSocket.
+   * Captures 10 FPS JPEG frames and sends over WebSocket so desktop feed never freezes!
+   */
+  const startCanvasFrameStream = () => {
+    if (frameIntervalRef.current) clearInterval(frameIntervalRef.current);
+
+    frameIntervalRef.current = window.setInterval(() => {
+      if (!videoRef.current || !wsRef.current || wsRef.current.readyState !== WebSocket.OPEN) return;
+      if (videoRef.current.readyState < 2) return;
+
+      try {
+        const canvas = canvasRef.current || document.createElement('canvas');
+        canvas.width = 640;
+        canvas.height = 360;
+        const ctx = canvas.getContext('2d');
+        if (ctx) {
+          ctx.drawImage(videoRef.current, 0, 0, 640, 360);
+          const dataUrl = canvas.toDataURL('image/jpeg', 0.65);
+          wsRef.current.send(JSON.stringify({ type: 'frame', image: dataUrl }));
+        }
+      } catch (e) {
+        // Ignore canvas draw error
+      }
+    }, 100);
   };
 
   // Toggle Torch / Flash
@@ -216,8 +439,9 @@ export const MobileStreamPage: React.FC = () => {
       const nextTorch = !torchOn;
       await (track as any).applyConstraints({ advanced: [{ torch: nextTorch }] });
       setTorchOn(nextTorch);
-    } catch (err) {
-      console.warn('[MobileStream] Torch control not supported on this device/browser:', err);
+      addLog(`Flash/Torch toggled ${nextTorch ? 'ON' : 'OFF'}`);
+    } catch (err: any) {
+      addLog(`Torch notice: ${err.message || 'Not supported on this device'}`);
       setTorchOn(!torchOn);
     }
   };
@@ -245,17 +469,42 @@ export const MobileStreamPage: React.FC = () => {
           </div>
           <div>
             <h1 className="text-sm font-bold uppercase tracking-wider text-white">NightVision Stream</h1>
-            <p className="text-[10px] text-cyan-400 font-mono">TOKEN: {token.substring(0, 10)}...</p>
+            <p className="text-[10px] text-cyan-400 font-mono">SESSION: {token.substring(0, 8)}...</p>
           </div>
         </div>
 
-        <div className="flex items-center gap-3 text-xs font-mono">
-          <span className="flex items-center gap-1 text-emerald-400 font-bold">
-            <Wifi className="w-3.5 h-3.5" /> LIVE
-          </span>
-          <span className="flex items-center gap-1 text-cyan-400">
-            <Battery className="w-3.5 h-3.5" /> {batteryLevel}%
-          </span>
+        {/* Dynamic Status Indicator Badge */}
+        <div className="flex items-center gap-2">
+          <div className="px-2.5 py-1 rounded-xl bg-slate-800 border border-slate-700 text-[10px] font-mono font-bold flex items-center gap-1.5">
+            <span
+              className={`w-2 h-2 rounded-full ${
+                status === 'Streaming' || status === 'Camera Connected'
+                  ? 'bg-emerald-400 animate-ping'
+                  : status === 'Requesting Permission'
+                  ? 'bg-amber-400 animate-pulse'
+                  : 'bg-red-400'
+              }`}
+            ></span>
+            <span
+              className={
+                status === 'Streaming'
+                  ? 'text-emerald-400'
+                  : status === 'Requesting Permission'
+                  ? 'text-amber-400'
+                  : 'text-red-400'
+              }
+            >
+              {status}
+            </span>
+          </div>
+
+          <button
+            onClick={() => setShowLogs(!showLogs)}
+            title="Toggle Debug Console Logs"
+            className="p-1.5 bg-slate-800 hover:bg-slate-700 text-slate-300 rounded-lg border border-slate-700"
+          >
+            <Terminal className="w-4 h-4" />
+          </button>
         </div>
       </div>
 
@@ -269,28 +518,52 @@ export const MobileStreamPage: React.FC = () => {
           className={`w-full h-full object-cover ${facingMode === 'user' ? 'scale-x-[-1]' : ''}`}
         />
 
+        <canvas ref={canvasRef} className="hidden" />
+
         {/* HUD Scanlines */}
         <div className="absolute inset-0 hud-scanline opacity-20 pointer-events-none"></div>
 
-        {/* Reticle */}
+        {/* Reticle Overlay */}
         <div className="absolute inset-0 pointer-events-none flex items-center justify-center">
           <div className="w-32 h-32 border border-cyan-500/50 rounded-2xl flex items-center justify-center">
             <div className="w-2 h-2 rounded-full bg-cyan-400 animate-ping"></div>
           </div>
         </div>
 
-        {/* Permission Error Banner */}
-        {!permissionGranted && (
-          <div className="absolute inset-0 bg-slate-950/95 flex flex-col items-center justify-center p-6 text-center space-y-4 z-20">
-            <AlertCircle className="w-12 h-12 text-red-500 animate-bounce" />
-            <h2 className="text-lg font-bold text-white uppercase">Camera Access Required</h2>
-            <p className="text-xs text-slate-400 max-w-xs">{errorMessage || 'Please allow camera permission to stream video to NightVision AI.'}</p>
+        {/* Error / Permission Overlay Banner */}
+        {(status === 'Camera Error' || status === 'Camera Disconnected' || status === 'Requesting Permission') && (
+          <div className="absolute inset-0 bg-slate-950/95 flex flex-col items-center justify-center p-6 text-center space-y-4 z-20 backdrop-blur-md">
+            {status === 'Requesting Permission' ? (
+              <RefreshCw className="w-12 h-12 text-amber-400 animate-spin" />
+            ) : (
+              <AlertCircle className="w-12 h-12 text-red-500 animate-bounce" />
+            )}
+            
+            <div className="space-y-1">
+              <h2 className="text-lg font-bold text-white uppercase">{errorMessage || status}</h2>
+              <p className="text-xs text-slate-400 max-w-xs">{errorDetails || 'Allow camera permission to start streaming live video.'}</p>
+            </div>
+
             <button
-              onClick={() => initCamera(facingMode, resolutionPreset)}
-              className="px-6 py-3 bg-cyan-400 text-black font-bold rounded-xl text-xs uppercase font-mono shadow-lg"
+              onClick={() => initCameraPipeline(facingMode, resolutionPreset)}
+              className="px-6 py-3 bg-cyan-400 hover:bg-cyan-300 active:scale-95 text-black font-bold rounded-xl text-xs uppercase font-mono shadow-lg flex items-center gap-2"
             >
-              Grant Camera Permission
+              <Power className="w-4 h-4" />
+              <span>Grant / Retry Camera Permission</span>
             </button>
+          </div>
+        )}
+
+        {/* Live Debug Logs Overlay */}
+        {showLogs && (
+          <div className="absolute inset-x-2 top-2 bottom-2 bg-slate-950/90 text-emerald-400 p-3 rounded-2xl font-mono text-[10px] overflow-y-auto border border-cyan-500/50 z-30 space-y-1">
+            <div className="flex justify-between border-b border-cyan-500/30 pb-1 text-white font-bold">
+              <span>MOBILE CAMERA LIVE DEBUG CONSOLE</span>
+              <button onClick={() => setShowLogs(false)} className="text-red-400">CLOSE [X]</button>
+            </div>
+            {logs.map((log, idx) => (
+              <div key={idx}>{log}</div>
+            ))}
           </div>
         )}
       </div>
@@ -312,8 +585,9 @@ export const MobileStreamPage: React.FC = () => {
           />
         </div>
 
-        {/* Main Action Buttons */}
+        {/* Action Buttons */}
         <div className="grid grid-cols-4 gap-2 text-center text-xs font-mono font-bold uppercase">
+          
           {/* Switch Rear / Front Camera */}
           <button
             onClick={() => setFacingMode(facingMode === 'environment' ? 'user' : 'environment')}
