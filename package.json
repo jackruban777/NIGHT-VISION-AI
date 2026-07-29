@@ -3,7 +3,7 @@
   "private": true,
   "version": "1.0.0",
   "scripts": {
-    "build": "cd frontend && npm install && npm run build && node -e \"require('fs').cpSync('dist', '../dist', {recursive: true})\"",
+    "build": "cd frontend && npm install && npm run build && node -e \"const fs=require('fs'); if(fs.existsSync('dist')){fs.cpSync('dist', '../dist', {recursive: true});}\"",
     "dev": "cd frontend && npm run dev"
   }
 }
