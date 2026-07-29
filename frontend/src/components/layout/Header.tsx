@@ -46,6 +46,16 @@ export const Header: React.FC<HeaderProps> = ({ title }) => {
           <span className="hidden sm:inline">{isMuted ? 'Voice Off' : 'Voice Active'}</span>
         </button>
 
+        {/* Test Audio Button */}
+        <button
+          onClick={() => voiceAlerts.testAudio()}
+          title="Test Voice Alert & Audio Chime"
+          className="px-3 py-2.5 rounded-xl border border-accent-electric/40 bg-accent-electric/10 hover:bg-accent-electric hover:text-black text-accent-electric font-label-caps text-xs uppercase font-bold transition-all flex items-center gap-1.5 shadow-[0_0_10px_rgba(0,229,255,0.15)]"
+        >
+          <Volume2 className="w-3.5 h-3.5" />
+          <span className="hidden md:inline">Test Audio</span>
+        </button>
+
         {/* System Telemetry Icons */}
         <div className="hidden lg:flex items-center gap-4 text-on-surface-variant font-data-mono text-xs border-r border-outline-variant pr-5">
           <div className="flex items-center gap-1.5 hover:text-accent-electric transition-colors" title="GPS Navigation Sync">
