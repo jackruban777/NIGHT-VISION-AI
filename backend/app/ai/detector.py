@@ -1,4 +1,5 @@
 import time
+import gc
 import cv2
 import numpy as np
 import psutil
@@ -39,20 +40,27 @@ class HazardDetector:
         self._init_hardware_and_model()
 
     def _init_hardware_and_model(self):
-        # 1. Hardware Capability Auto-Detection
+        # 1. Hardware Capability Auto-Detection & Memory Optimization
         try:
             import torch
+            # Limit PyTorch CPU thread pool overhead to keep RAM < 250MB
+            try:
+                torch.set_num_threads(1)
+                torch.set_num_interop_threads(1)
+            except Exception:
+                pass
+
             if torch.cuda.is_available():
                 self.device = "cuda"
                 self.half = True
                 self.imgsz = settings.GPU_RESOLUTION
-                print("[HazardDetector] Hardware: NVIDIA CUDA GPU Acceleration Active (FP16 mode, 640x640).")
+                print("[HazardDetector] Hardware: NVIDIA CUDA GPU Acceleration Active (FP16 mode).")
             else:
                 self.device = "cpu"
                 self.half = False
                 self.imgsz = settings.CPU_RESOLUTION
-                print(f"[HazardDetector] Hardware: CPU Mode Active ({self.imgsz}x{self.imgsz}).")
-        except Exception as e:
+                print(f"[HazardDetector] Hardware: Low-Memory CPU Mode Active ({self.imgsz}x{self.imgsz}).")
+        except Exception:
             self.device = "cpu"
             self.half = False
             self.imgsz = settings.CPU_RESOLUTION
@@ -71,11 +79,12 @@ class HazardDetector:
                 self.active_model_name = "YOLOv8n (ByteTrack)"
                 print(f"[HazardDetector] Successfully loaded Fallback Model: {settings.FALLBACK_MODEL_NAME}")
 
-            # 3. Model Warm-Up Inference
-            print("[HazardDetector] Running warm-up inference to pre-allocate tensor buffers...")
-            dummy_frame = np.zeros((320, 320, 3), dtype=np.uint8)
+            # 3. Model Warm-Up & Memory Garbage Collection
+            print("[HazardDetector] Running warm-up inference...")
+            dummy_frame = np.zeros((256, 256, 3), dtype=np.uint8)
             _ = self.model.predict(dummy_frame, verbose=False)
-            print("[HazardDetector] Warm-up complete. Detection engine ready.")
+            gc.collect()
+            print("[HazardDetector] Warm-up complete. Memory optimized.")
 
         except Exception as e:
             print(f"[HazardDetector] Error initializing YOLO model: {e}")
@@ -83,13 +92,6 @@ class HazardDetector:
             self.active_model_name = "Error loading model"
 
     def process_frame(self, frame: np.ndarray, apply_night_enhance: bool = True) -> dict:
-        """
-        High-Speed Real-Time AI Perception Pipeline:
-        1. Fast Conditional Ambient CLAHE Enhancement (skips if brightness >= 80)
-        2. YOLO11n / YOLOv8n ByteTrack Persistent Tracking
-        3. Monocular Pinhole Distance Estimation & TTC Collision Risk Prediction
-        4. Decoupled AI FPS (6-10 FPS) vs Camera Preview FPS (60 FPS) Telemetry
-        """
         t_start = time.perf_counter()
 
         if frame is None or frame.size == 0:
@@ -117,7 +119,6 @@ class HazardDetector:
         detections = []
         det_counter = 1
 
-        # Attempt lazy initialization if model was not loaded yet
         if self.model is None:
             self._init_hardware_and_model()
 
@@ -126,17 +127,18 @@ class HazardDetector:
 
         if self.model is not None:
             try:
-                # 2. Run Object Detection + ByteTrack Persistent Object Tracking
-                results = self.model.track(
-                    enhanced_frame,
-                    persist=True,
-                    tracker=settings.DEFAULT_TRACKER,
-                    conf=settings.DEFAULT_CONFIDENCE_THRESHOLD,
-                    iou=settings.DEFAULT_IOU_THRESHOLD,
-                    imgsz=self.imgsz,
-                    half=self.half,
-                    verbose=False,
-                )
+                import torch
+                with torch.inference_mode(): # Disable autograd to save RAM
+                    results = self.model.track(
+                        enhanced_frame,
+                        persist=True,
+                        tracker=settings.DEFAULT_TRACKER,
+                        conf=settings.DEFAULT_CONFIDENCE_THRESHOLD,
+                        iou=settings.DEFAULT_IOU_THRESHOLD,
+                        imgsz=self.imgsz,
+                        half=self.half,
+                        verbose=False,
+                    )
                 t_track_start = time.perf_counter()
 
                 for r in results:
@@ -145,26 +147,18 @@ class HazardDetector:
                         cls_id = int(box.cls[0])
                         raw_class = r.names[cls_id].lower()
                         conf = float(box.conf[0])
-
-                        # Extract ByteTrack Persistent Track ID
                         track_id = int(box.id[0]) if (box.id is not None) else None
 
                         if raw_class in TARGET_CLASS_MAP:
                             obj_class, default_speed = TARGET_CLASS_MAP[raw_class]
-                            
-                            # Bounding Box Coordinates [x1, y1, x2, y2]
                             x1, y1, x2, y2 = box.xyxy[0].tolist()
-                            bx = int(x1)
-                            by = int(y1)
-                            bw = int(x2 - x1)
-                            bh = int(y2 - y1)
+                            bx, by, bw, bh = int(x1), int(y1), int(x2 - x1), int(y2 - y1)
 
                             if bw < 5 or bh < 5:
                                 continue
 
                             dist_m = distance_calculator.estimate_distance(bh, obj_class)
                             risk_info = collision_predictor.predict_risk(dist_m, default_speed)
-
                             obj_id_str = f"track_{track_id:02d}" if (track_id is not None) else f"det_{det_counter:02d}"
 
                             detections.append({
@@ -178,11 +172,10 @@ class HazardDetector:
                             })
                             det_counter += 1
 
-                            if len(detections) >= 15:
+                            if len(detections) >= 12:
                                 break
 
             except Exception as e:
-                # If tracking fails fallback to predict
                 try:
                     results = self.model.predict(
                         enhanced_frame,
@@ -222,7 +215,6 @@ class HazardDetector:
         if tracking_time_ms <= 0: tracking_time_ms = 1.2
         if inference_time_ms <= 0: inference_time_ms = 24.5
 
-        # Determine Highest Risk Level
         highest_risk = "Low"
         for d in detections:
             if d["risk"]["risk_level"] == "Critical":
@@ -231,7 +223,6 @@ class HazardDetector:
             elif d["risk"]["risk_level"] == "High" and highest_risk != "Critical":
                 highest_risk = "High"
 
-        # System Telemetry
         cpu_usage = psutil.cpu_percent(interval=None)
         ram_usage = psutil.virtual_memory().percent
 
