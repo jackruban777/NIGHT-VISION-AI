@@ -325,8 +325,8 @@ class HazardDetector:
                         if raw_class in TARGET_CLASS_MAP:
                             obj_class, default_speed = TARGET_CLASS_MAP[raw_class]
                         else:
-                            obj_class = raw_class.title()
-                            default_speed = 0.0
+                            # Ignore irrelevant COCO classes like airplane, kite, umbrella, etc.
+                            continue
 
                         x1, y1, x2, y2 = box.xyxy[0].tolist()
                         bx, by, bw, bh = int(x1), int(y1), int(x2 - x1), int(y2 - y1)
