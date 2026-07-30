@@ -6,13 +6,29 @@ services:
     region: singapore
     plan: free
     rootDir: backend
-    buildCommand: pip install -r requirements.txt
-    startCommand: uvicorn app.main:app --host 0.0.0.0 --port $PORT
+    buildCommand: pip install --no-cache-dir -r requirements.txt
+    startCommand: uvicorn app.main:app --host 0.0.0.0 --port $PORT --workers 1 --limit-concurrency 20
     envVars:
       - key: DATABASE_URL
         value: sqlite:///./nightvision.db
       - key: SECRET_KEY
         generateValue: true
+      - key: OMP_NUM_THREADS
+        value: "1"
+      - key: MKL_NUM_THREADS
+        value: "1"
+      - key: OPENBLAS_NUM_THREADS
+        value: "1"
+      - key: NUMEXPR_NUM_THREADS
+        value: "1"
+      - key: DEFAULT_CONFIDENCE_THRESHOLD
+        value: "0.25"
+      - key: IMAGE_SIZE
+        value: "320"
+      - key: CPU_RESOLUTION
+        value: "320"
+      - key: MAX_DETECTIONS
+        value: "50"
 
   # 2. React + Vite Frontend Static Site
   - type: web

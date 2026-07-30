@@ -60,6 +60,14 @@ class SignalManager:
             ws = self.active_sessions[session_token][target_role]
             await ws.send_text(json.dumps(message))
 
+    async def send_bytes(self, session_token: str, target_role: str, data: bytes):
+        if session_token in self.active_sessions and target_role in self.active_sessions[session_token]:
+            ws = self.active_sessions[session_token][target_role]
+            try:
+                await ws.send_bytes(data)
+            except Exception:
+                pass
+
 signal_manager = SignalManager()
 
 @router.post("/generate-code")

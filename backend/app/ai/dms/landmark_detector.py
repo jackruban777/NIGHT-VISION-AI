@@ -25,9 +25,12 @@ class LandmarkDetector:
     def __init__(self):
         self.mp_face_mesh = None
         self.face_mesh_model = None
-        self._init_mediapipe()
+        self._initialized = False
 
     def _init_mediapipe(self):
+        if self._initialized:
+            return
+        self._initialized = True
         try:
             try:
                 import mediapipe.python.solutions.face_mesh as mp_face_mesh
@@ -38,11 +41,11 @@ class LandmarkDetector:
 
             self.face_mesh_model = self.mp_face_mesh.FaceMesh(
                 max_num_faces=1,
-                refine_landmarks=True,
+                refine_landmarks=False,
                 min_detection_confidence=0.5,
                 min_tracking_confidence=0.5
             )
-            print("[LandmarkDetector] MediaPipe FaceMesh (468 3D Keypoints) initialized successfully.")
+            print("[LandmarkDetector] MediaPipe FaceMesh initialized successfully.")
         except Exception as e:
             print(f"[LandmarkDetector] MediaPipe FaceMesh notice ({e}). Using geometric fallback pipeline.")
             self.face_mesh_model = None
@@ -52,6 +55,9 @@ class LandmarkDetector:
             return None
 
         h, w = frame.shape[:2]
+
+        if not self._initialized:
+            self._init_mediapipe()
 
         if self.face_mesh_model is not None:
             try:

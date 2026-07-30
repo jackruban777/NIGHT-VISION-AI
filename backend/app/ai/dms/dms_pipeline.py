@@ -41,7 +41,7 @@ class DriverMonitoringPipeline:
         # 1. Low-Light Night Enhancement
         t_enhance_start = time.perf_counter()
         if apply_night_enhance:
-            enhanced_frame = night_enhancer.enhance_frame(frame)
+            enhanced_frame, _enhance_tel = night_enhancer.enhance_frame(frame)
         else:
             enhanced_frame = frame
         t_enhance_end = time.perf_counter()

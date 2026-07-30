@@ -27,9 +27,12 @@ app.include_router(trips.router)
 app.include_router(mobile_routes.router, prefix=settings.API_V1_STR)
 app.include_router(mobile_routes.router)
 
+from app.ai.detector import hazard_detector
+
 @app.on_event("startup")
 def startup_event():
     init_db()
+    hazard_detector.auto_test_pipeline()
 
 @app.get("/")
 def root():
@@ -40,9 +43,20 @@ def root():
         "docs": "/docs",
     }
 
+import psutil, os, gc
+
 @app.get("/health")
 def health_check():
-    return {"status": "healthy", "neural_engine": "active", "db": "connected"}
+    process = psutil.Process(os.getpid())
+    ram_mb = round(process.memory_info().rss / 1024 / 1024, 1)
+    if ram_mb > 450.0:
+        gc.collect()
+    return {
+        "status": "healthy",
+        "neural_engine": "active",
+        "memory_rss_mb": ram_mb,
+        "db": "connected"
+    }
 
 if __name__ == "__main__":
     import uvicorn

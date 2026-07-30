@@ -15,9 +15,13 @@ class FaceDetector:
         self.last_face_seen_time = time.time()
         self.mp_face_detection = None
         self.face_detection_model = None
-        self._init_detector()
+        self._initialized = False
+        self._cascade = None
 
     def _init_detector(self):
+        if self._initialized:
+            return
+        self._initialized = True
         try:
             try:
                 import mediapipe.python.solutions.face_detection as mp_face_detection
@@ -41,6 +45,9 @@ class FaceDetector:
 
         h, w = frame.shape[:2]
         current_time = time.time()
+
+        if not self._initialized:
+            self._init_detector()
 
         if self.face_detection_model is not None:
             try:
@@ -71,9 +78,10 @@ class FaceDetector:
                 pass
 
         try:
+            if self._cascade is None:
+                self._cascade = cv2.CascadeClassifier(cv2.data.haarcascades + 'haarcascade_frontalface_default.xml')
             gray = cv2.cvtColor(frame, cv2.COLOR_BGR2GRAY)
-            face_cascade = cv2.CascadeClassifier(cv2.data.haarcascades + 'haarcascade_frontalface_default.xml')
-            faces = face_cascade.detectMultiScale(gray, scaleFactor=1.1, minNeighbors=4, minSize=(60, 60))
+            faces = self._cascade.detectMultiScale(gray, scaleFactor=1.1, minNeighbors=4, minSize=(60, 60))
             if len(faces) > 0:
                 fx, fy, fw, fh = faces[0]
                 self.last_face_seen_time = current_time

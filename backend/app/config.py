@@ -20,10 +20,10 @@ class Settings:
     MODEL_PATH: str = os.getenv("YOLO12_MODEL_PATH", os.path.join(os.path.dirname(os.path.dirname(__file__)), "models", "yolo12n.pt"))
     PRIMARY_MODEL_NAME: str = "yolo12n.pt"
     DEFAULT_TRACKER: str = "bytetrack.yaml"
-    DEFAULT_CONFIDENCE_THRESHOLD: float = 0.40
-    DEFAULT_IOU_THRESHOLD: float = 0.45
-    IMAGE_SIZE: int = 640
-    MAX_DETECTIONS: int = 100
+    DEFAULT_CONFIDENCE_THRESHOLD: float = float(os.getenv("DEFAULT_CONFIDENCE_THRESHOLD", "0.25"))
+    DEFAULT_IOU_THRESHOLD: float = float(os.getenv("DEFAULT_IOU_THRESHOLD", "0.45"))
+    IMAGE_SIZE: int = int(os.getenv("IMAGE_SIZE", "640"))
+    MAX_DETECTIONS: int = int(os.getenv("MAX_DETECTIONS", "100"))
     FRAME_SKIP_INTERVAL: int = 5
     BRIGHTNESS_THRESHOLD: float = 80.0
     

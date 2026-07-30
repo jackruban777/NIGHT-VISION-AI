@@ -1,11 +1,13 @@
 import os
 import time
+import tempfile
 import cv2
 import numpy as np
 
-# Required Environment Setup
-os.environ["YOLO_CONFIG_DIR"] = "/tmp/Ultralytics"
-os.makedirs("/tmp/Ultralytics", exist_ok=True)
+# Required Environment Setup (cross-platform temp dir)
+_ultralytics_dir = os.path.join(tempfile.gettempdir(), "Ultralytics")
+os.environ["YOLO_CONFIG_DIR"] = _ultralytics_dir
+os.makedirs(_ultralytics_dir, exist_ok=True)
 
 try:
     import torch
@@ -18,8 +20,7 @@ except ImportError:
 class ZeroDCEPlusModel(nn.Module if HAS_TORCH else object):
     """
     Zero-DCE++ (Zero-Reference Deep Curve Estimation for Low-Light Enhancement).
-    Uses depthwise separable convolutions to estimate pixel-wise higher-order curves
-    for fast (<15ms), color-preserving, highlight-protected low-light enhancement.
+    Uses depthwise separable convolutions to estimate pixel-wise higher-order curves.
     """
     def __init__(self, scale_factor=1):
         if not HAS_TORCH:
@@ -27,7 +28,6 @@ class ZeroDCEPlusModel(nn.Module if HAS_TORCH else object):
         super(ZeroDCEPlusModel, self).__init__()
         self.scale_factor = scale_factor
 
-        # Depthwise Separable Convolutions for ultra-fast performance
         self.conv1 = nn.Conv2d(3, 32, 3, stride=1, padding=1, groups=1, bias=True)
         self.conv2 = nn.Conv2d(32, 32, 3, stride=1, padding=1, groups=32, bias=True)
         self.conv3 = nn.Conv2d(32, 32, 3, stride=1, padding=1, groups=32, bias=True)
@@ -41,7 +41,6 @@ class ZeroDCEPlusModel(nn.Module if HAS_TORCH else object):
         if not HAS_TORCH:
             return x, None
         
-        # Downsample for curve parameter estimation
         if self.scale_factor == 1:
             x_down = x
         else:
@@ -59,7 +58,6 @@ class ZeroDCEPlusModel(nn.Module if HAS_TORCH else object):
         if self.scale_factor != 1:
             enhance_params = F.interpolate(enhance_params, size=(x.shape[2], x.shape[3]), mode='bilinear', align_corners=False)
 
-        # Apply 8-iteration curve estimation
         r1, r2, r3, r4, r5, r6, r7, r8 = torch.split(enhance_params, 3, dim=1)
         
         x = x + r1 * (torch.pow(x, 2) - x)
@@ -77,13 +75,13 @@ class ZeroDCEPlusModel(nn.Module if HAS_TORCH else object):
 class AINightVisionEnhancer:
     """
     AI-Powered Low-Light Image Enhancement Pipeline for NightVision AI.
-    Integrates Zero-DCE++, RetinexFormer, SCI, and Adaptive Illuminance Curve estimation.
+    Memory-Optimized for Render 512MB RAM environments.
     """
     def __init__(self):
         self.device = "cpu"
-        self.model_name = "Zero-DCE++ (Deep Curve AI)"
+        self.model_name = "Adaptive Retinex Curve AI"
         self.model = None
-        self.mode_override = "Auto" # "Auto", "Day", "Evening", "Night", "Extreme Dark"
+        self.mode_override = "Auto"
         self._init_ai_models()
 
     def _init_ai_models(self):
@@ -91,16 +89,19 @@ class AINightVisionEnhancer:
             try:
                 if torch.cuda.is_available():
                     self.device = "cuda"
+                    self.model_name = "Zero-DCE++ (Deep Curve AI)"
+                    self.model = ZeroDCEPlusModel(scale_factor=1)
+                    self.model.eval()
+                    self.model = self.model.cuda()
+                    print("[AINightVisionEnhancer] Loaded Zero-DCE++ AI Low-Light Model on CUDA GPU.")
                 else:
                     self.device = "cpu"
-
-                self.model = ZeroDCEPlusModel(scale_factor=1)
-                self.model.eval()
-                if self.device == "cuda":
-                    self.model = self.model.cuda()
-                print(f"[AINightVisionEnhancer] Loaded Zero-DCE++ AI Low-Light Model on {self.device.upper()}.")
+                    self.model = None
+                    self.model_name = "Adaptive Retinex Curve Engine (CPU Fast)"
+                    print("[AINightVisionEnhancer] Low-Memory CPU Mode: Adaptive Retinex Curve Active.")
             except Exception as e:
-                print(f"[AINightVisionEnhancer] Zero-DCE++ init notice: {e}. Using High-Speed Adaptive Curve Engine.")
+                self.model = None
+                self.model_name = "Adaptive Retinex Curve Engine"
 
     def set_mode(self, mode: str):
         valid_modes = ["Auto", "Day", "Evening", "Night", "Extreme Dark"]
@@ -108,17 +109,12 @@ class AINightVisionEnhancer:
             self.mode_override = mode
 
     def analyze_luminance(self, frame: np.ndarray) -> float:
-        """Calculates mean luminance (brightness) in YCbCr/HSV space."""
         if frame is None or frame.size == 0:
             return 128.0
         gray = cv2.cvtColor(frame, cv2.COLOR_BGR2GRAY)
         return float(np.mean(gray))
 
     def enhance_frame(self, frame: np.ndarray, user_mode: str = None) -> tuple[np.ndarray, dict]:
-        """
-        AI Low-Light Image Enhancement Pipeline Execution.
-        Returns: (enhanced_bgr_frame, telemetry_dict)
-        """
         t0 = time.perf_counter()
 
         if frame is None or frame.size == 0:
@@ -127,11 +123,11 @@ class AINightVisionEnhancer:
         mode = user_mode or self.mode_override
         mean_lum = self.analyze_luminance(frame)
 
-        # 1. Determine Effective Adaptive Lighting Condition
+        # Skip enhancement if lighting is sufficient (>100 cd/m²)
         if mode == "Auto":
-            if mean_lum >= 110.0:
+            if mean_lum >= 100.0:
                 effective_mode = "Daylight"
-            elif mean_lum >= 70.0:
+            elif mean_lum >= 65.0:
                 effective_mode = "Evening"
             elif mean_lum >= 30.0:
                 effective_mode = "Night"
@@ -140,7 +136,6 @@ class AINightVisionEnhancer:
         else:
             effective_mode = mode
 
-        # 2. Skip enhancement for Daylight
         if effective_mode in ["Day", "Daylight"]:
             t1 = time.perf_counter()
             return frame, {
@@ -150,46 +145,31 @@ class AINightVisionEnhancer:
                 "latency_ms": round((t1 - t0) * 1000, 2),
             }
 
-        enhanced = frame.copy()
-
-        # 3. AI Deep Learning Curve Enhancement (Zero-DCE++ / SCI Retinex Pipeline)
+        # Apply Fast Adaptive Retinex Curve or Zero-DCE++ on CUDA
         try:
-            if HAS_TORCH and self.model is not None:
-                # Prepare PyTorch Tensor
+            if HAS_TORCH and self.model is not None and self.device == "cuda":
                 rgb = cv2.cvtColor(frame, cv2.COLOR_BGR2RGB)
                 rgb_norm = (rgb.astype(np.float32) / 255.0)
-                tensor_in = torch.from_numpy(rgb_norm).permute(2, 0, 1).unsqueeze(0)
-
-                if self.device == "cuda":
-                    tensor_in = tensor_in.cuda()
+                tensor_in = torch.from_numpy(rgb_norm).permute(2, 0, 1).unsqueeze(0).cuda()
 
                 with torch.no_grad():
                     enhanced_tensor, _ = self.model(tensor_in)
 
-                if self.device == "cuda":
-                    enhanced_tensor = enhanced_tensor.cpu()
-
-                out_img = enhanced_tensor.squeeze(0).permute(1, 2, 0).numpy()
+                out_img = enhanced_tensor.cpu().squeeze(0).permute(1, 2, 0).numpy()
                 out_img = np.clip(out_img * 255.0, 0, 255).astype(np.uint8)
                 enhanced = cv2.cvtColor(out_img, cv2.COLOR_RGB2BGR)
             else:
-                # Fast Adaptive Retinex Curve fallback
                 enhanced = self._adaptive_retinex_curve(frame, effective_mode)
-        except Exception as e:
+        except Exception:
             enhanced = self._adaptive_retinex_curve(frame, effective_mode)
 
-        # 4. Highlight Protection (Prevent overexposing headlights, streetlamps, traffic lights)
+        # Highlight Protection (Prevent overexposing headlights, streetlamps)
         gray_orig = cv2.cvtColor(frame, cv2.COLOR_BGR2GRAY)
         highlight_mask = cv2.threshold(gray_orig, 220, 255, cv2.THRESH_BINARY)[1]
-        highlight_mask = cv2.GaussianBlur(highlight_mask, (15, 15), 0)
-        alpha = (highlight_mask.astype(np.float32) / 255.0)[:, :, None]
-        enhanced = (frame.astype(np.float32) * alpha + enhanced.astype(np.float32) * (1.0 - alpha)).astype(np.uint8)
-
-        # 5. Denoising & Edge Preservation for Extreme Dark mode
-        if effective_mode in ["Extreme Dark", "Night"]:
-            if mean_lum < 40.0:
-                # Bilateral Filter preserves obstacle edges while smoothing shadow noise
-                enhanced = cv2.bilateralFilter(enhanced, d=5, sigmaColor=35, sigmaSpace=35)
+        if np.any(highlight_mask):
+            highlight_mask = cv2.GaussianBlur(highlight_mask, (15, 15), 0)
+            alpha = (highlight_mask.astype(np.float32) / 255.0)[:, :, None]
+            enhanced = (frame.astype(np.float32) * alpha + enhanced.astype(np.float32) * (1.0 - alpha)).astype(np.uint8)
 
         t1 = time.perf_counter()
         latency_ms = round((t1 - t0) * 1000, 2)
@@ -202,25 +182,22 @@ class AINightVisionEnhancer:
         }
 
     def _adaptive_retinex_curve(self, frame: np.ndarray, mode: str) -> np.ndarray:
-        """Adaptive Multi-Scale Retinex Curve Estimator with natural color preservation."""
         lab = cv2.cvtColor(frame, cv2.COLOR_BGR2LAB)
         l, a, b = cv2.split(lab)
 
-        # Multi-scale adaptive gamma & CLAHE
         if mode == "Extreme Dark":
-            clip = 3.5
-            gamma = 1.6
+            clip = 3.2
+            gamma = 1.5
         elif mode == "Night":
-            clip = 2.5
-            gamma = 1.35
-        else: # Evening
-            clip = 1.8
-            gamma = 1.15
+            clip = 2.2
+            gamma = 1.3
+        else:
+            clip = 1.6
+            gamma = 1.1
 
         clahe = cv2.createCLAHE(clipLimit=clip, tileGridSize=(8, 8))
         l_enhanced = clahe.apply(l)
 
-        # Gamma curve adjustment
         inv_gamma = 1.0 / gamma
         table = np.array([((i / 255.0) ** inv_gamma) * 255 for i in range(256)]).astype("uint8")
         l_enhanced = cv2.LUT(l_enhanced, table)

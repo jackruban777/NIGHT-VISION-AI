@@ -27,29 +27,42 @@ export interface DetectionResult {
       collision_probability: number;
     };
   }[];
+  zero_detections_reason?: string;
   telemetry?: {
     cpu_usage_pct: number;
     ram_usage_pct: number;
     latency_ms: number;
     tracking_ms?: number;
   };
+  night_vision?: {
+    enhancement_model: string;
+    mode: string;
+    luminance: number;
+    enhancement_ms: number;
+    detection_fps: number;
+  };
 }
 
 export const apiService = {
   // AI Detection Endpoint
-  analyzeFrame: async (imageBlob: Blob, nightEnhance: boolean = true): Promise<DetectionResult | null> => {
+  analyzeFrame: async (imageBlob: Blob, nightEnhance: boolean = true, nightVisionMode: string = 'Auto'): Promise<DetectionResult | null> => {
     try {
       const formData = new FormData();
       formData.append('file', imageBlob, 'frame.jpg');
       
-      let res = await fetch(`${API_BASE_URL}/ai/detect?night_enhance=${nightEnhance}`, {
+      const params = new URLSearchParams({
+        night_enhance: String(nightEnhance),
+        night_vision_mode: nightVisionMode,
+      });
+
+      let res = await fetch(`${API_BASE_URL}/ai/detect?${params}`, {
         method: 'POST',
         body: formData,
       });
 
       if (!res.ok) {
         // Fallback to direct backend URL if proxy returns error
-        res = await fetch(`${DIRECT_BACKEND_URL}/ai/detect?night_enhance=${nightEnhance}`, {
+        res = await fetch(`${DIRECT_BACKEND_URL}/ai/detect?${params}`, {
           method: 'POST',
           body: formData,
         });
@@ -61,7 +74,11 @@ export const apiService = {
       try {
         const formData = new FormData();
         formData.append('file', imageBlob, 'frame.jpg');
-        const res = await fetch(`${DIRECT_BACKEND_URL}/ai/detect?night_enhance=${nightEnhance}`, {
+        const params = new URLSearchParams({
+          night_enhance: String(nightEnhance),
+          night_vision_mode: nightVisionMode,
+        });
+        const res = await fetch(`${DIRECT_BACKEND_URL}/ai/detect?${params}`, {
           method: 'POST',
           body: formData,
         });
