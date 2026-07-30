@@ -334,6 +334,18 @@ class HazardDetector:
                         if bw < 4 or bh < 4:
                             continue
 
+                        # Ego-Vehicle & Interior Mask: Filter out steering wheels and dashboards
+                        is_ego_interior = False
+                        if bh > f_height * 0.55:  # Massive boxes (too close)
+                            is_ego_interior = True
+                        if y1 > f_height * 0.65:  # Objects entirely at the bottom (dashboard)
+                            is_ego_interior = True
+                        if y2 > f_height * 0.85 and bw > f_width * 0.35: # Wide objects at the bottom
+                            is_ego_interior = True
+                            
+                        if is_ego_interior and obj_class in ["Car", "Truck", "Bus"]:
+                            continue
+
                         dist_m = distance_calculator.estimate_distance(bh, obj_class)
                         risk_info = collision_predictor.predict_risk(dist_m, default_speed)
                         obj_id_str = f"det_{det_counter:02d}"
