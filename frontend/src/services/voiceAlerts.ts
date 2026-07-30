@@ -276,7 +276,7 @@ class VoiceAlertService {
       const utterance = new SpeechSynthesisUtterance(item.text);
       utterance.volume = this.volume;
       utterance.lang = this.lang;
-      utterance.rate = 1.1;
+      utterance.rate = 1.45; // Faster and snappier alerts
       utterance.pitch = 1.0;
 
       const voices = window.speechSynthesis.getVoices();
