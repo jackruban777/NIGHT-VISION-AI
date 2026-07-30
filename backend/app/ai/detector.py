@@ -69,17 +69,23 @@ TARGET_CLASS_MAP = {
 }
 
 def _load_face_cascade():
-    try:
-        data_path = getattr(cv2, 'data', None)
-        if data_path is None:
+    xml_path = os.path.join(tempfile.gettempdir(), "haarcascade_frontalface_default.xml")
+    if not os.path.exists(xml_path):
+        cascade_url = "https://raw.githubusercontent.com/opencv/opencv/master/data/haarcascades/haarcascade_frontalface_default.xml"
+        try:
+            urllib.request.urlretrieve(cascade_url, xml_path)
+        except Exception as e:
+            print(f"[HazardDetector] Failed to download cascade: {e}")
             return None
-        xml_path = data_path.haarcascades + 'haarcascade_frontalface_default.xml'
-        if hasattr(cv2, 'objdetect') and hasattr(cv2.objdetect, 'CascadeClassifier'):
-            cc = cv2.objdetect.CascadeClassifier(xml_path)
-            return cc if not cc.empty() else None
-        if hasattr(cv2, 'CascadeClassifier'):
-            cc = cv2.CascadeClassifier(xml_path)
-            return cc if not cc.empty() else None
+            
+    try:
+        if os.path.exists(xml_path):
+            if hasattr(cv2, 'objdetect') and hasattr(cv2.objdetect, 'CascadeClassifier'):
+                cc = cv2.objdetect.CascadeClassifier(xml_path)
+                return cc if not cc.empty() else None
+            elif hasattr(cv2, 'CascadeClassifier'):
+                cc = cv2.CascadeClassifier(xml_path)
+                return cc if not cc.empty() else None
         return None
     except Exception as e:
         print(f"[HazardDetector] Face cascade load error: {e}")
