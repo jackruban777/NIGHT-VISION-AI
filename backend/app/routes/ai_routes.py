@@ -11,8 +11,8 @@ from app.ai.dms.dms_pipeline import dms_pipeline
 router = APIRouter(prefix="/ai", tags=["AI Perception"])
 
 @router.post("/detect")
-async def analyze_frame(file: UploadFile = File(...), night_enhance: bool = True, night_vision_mode: str = "Auto"):
-    contents = await file.read()
+def analyze_frame(file: UploadFile = File(...), night_enhance: bool = True, night_vision_mode: str = "Auto"):
+    contents = file.file.read()
     nparr = np.frombuffer(contents, np.uint8)
     frame = cv2.imdecode(nparr, cv2.IMREAD_COLOR)
 
@@ -23,12 +23,12 @@ async def analyze_frame(file: UploadFile = File(...), night_enhance: bool = True
     return result
 
 @router.post("/dms/analyze")
-async def analyze_dms_frame(file: UploadFile = File(...), night_enhance: bool = True):
+def analyze_dms_frame(file: UploadFile = File(...), night_enhance: bool = True):
     """
     Production Driver Monitoring System (DMS) Single-Frame Analysis Endpoint.
     Returns complete biometric telemetry (EAR, MAR, Head Pose, PERCLOS, Phone Distraction, Temporal Risk Score).
     """
-    contents = await file.read()
+    contents = file.file.read()
     nparr = np.frombuffer(contents, np.uint8)
     frame = cv2.imdecode(nparr, cv2.IMREAD_COLOR)
 
