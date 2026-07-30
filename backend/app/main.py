@@ -7,7 +7,7 @@ from app.routes import ai_routes, trips, mobile_routes
 app = FastAPI(
     title=settings.PROJECT_NAME,
     description="NightVision AI - ADAS Night-Driving Safety Platform Backend API",
-    version="4.2.0",
+    version="4.3.0",
 )
 
 # CORS Middleware
@@ -39,7 +39,7 @@ def root():
     return {
         "status": "online",
         "service": settings.PROJECT_NAME,
-        "version": "4.2.0",
+        "version": "4.3.0",
         "docs": "/docs",
     }
 
@@ -54,6 +54,7 @@ def health_check():
     return {
         "status": "healthy",
         "neural_engine": "active",
+        "surveillance_hud": "active",
         "memory_rss_mb": ram_mb,
         "db": "connected"
     }
