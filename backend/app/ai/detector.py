@@ -118,8 +118,8 @@ class HazardDetector:
         try:
             import torch
             try:
-                torch.set_num_threads(1)
-                torch.set_num_interop_threads(1)
+                torch.set_num_threads(4)
+                torch.set_num_interop_threads(4)
             except Exception:
                 pass
 
@@ -253,16 +253,27 @@ class HazardDetector:
         if _HAAR is None:
             return []
         try:
-            gray = cv2.cvtColor(frame, cv2.COLOR_BGR2GRAY)
+            # Optimize face detection by downscaling huge frames
+            h, w = frame.shape[:2]
+            scale = 1.0
+            if w > 640:
+                scale = 640.0 / w
+                small_frame = cv2.resize(frame, (640, int(h * scale)))
+            else:
+                small_frame = frame
+                
+            gray = cv2.cvtColor(small_frame, cv2.COLOR_BGR2GRAY)
             gray = cv2.equalizeHist(gray)
             faces = _HAAR.detectMultiScale(
                 gray, scaleFactor=1.1, minNeighbors=5, minSize=(30, 30)
             )
             result = []
-            for (x, y, w, h) in faces:
-                sb_status = self._detect_seatbelt(frame, x, y, w, h)
+            for (x, y, fw, fh) in faces:
+                # Scale boxes back to original resolution
+                orig_x, orig_y, orig_fw, orig_fh = int(x/scale), int(y/scale), int(fw/scale), int(fh/scale)
+                sb_status = self._detect_seatbelt(frame, orig_x, orig_y, orig_fw, orig_fh)
                 result.append({
-                    'box':   [int(x), int(y), int(w), int(h)],
+                    'box':   [orig_x, orig_y, orig_fw, orig_fh],
                     'label': f'Driver Face ({sb_status})',
                     'conf':  0.92,
                 })
